@@ -11,6 +11,11 @@
 - 公開入口改以繁體中文為主，英文原文鏡像放 `README.en.md`。
 - 建立可重現的 Windows 開發 gate，以及逐筆審查的上游追蹤（commit／PR／issue 三軸）。
 - 產品程式碼、prompt、skills、範例、plugin 仍以上游為準，不因本線需求改寫成維護索引。
+- **依賴直接跟上游最新版走，不因「這是上游持有的宣告檔」保留落後版本或另開繞道檔**；測試
+  因此變紅就改測試條件，不用 deselect／skip 繞過。每一處與上游的差異都登記在
+  [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md)，由 [`tools/check_divergence.py`](tools/check_divergence.py)
+  機器檢查兩者一致。這是 2026-09-05 的政策轉向，取代原本「上游檔案零 diff」的做法——見
+  [`docs/DECISIONS.md`](docs/DECISIONS.md)。接受這個 fork 終究會與上游分岔，是預期結果不是風險。
 
 **回貢判準：修的是上游的 bug 就送回去；這裡獨創的文件與 Windows 維護骨架留在這裡。**
 
@@ -34,19 +39,24 @@
 | `tools/check_dependency_freshness.py` | 新增：見上 |
 | `tools/check_upstream_updates.py` | 新增：讀寫 `tools/upstream_baseline.json` 的四面向水位（commit／PR／issue／已知分支清單） |
 | `tools/check_links.py` | 新增：維護文件之間的相對連結檢查 |
-| `requirements-dev-windows.txt` | 新增：`-r requirements-dev.txt` 再加 `tzdata`。Windows 版 CPython 沒有系統 IANA 時區資料庫，少了它有 4 個上游時鐘測試在本機紅。獨立成檔而不是改上游的 `requirements-dev.txt`，讓上游那份保持零 diff |
-| `tools/dev_check.ps1` | 新增：Windows 本機一鍵 gate（時區資料庫前檢 → ruff → ruff format → pytest → `scripts/check.py` → `check_links.py`），並 deselect 一個 Windows 沒有 POSIX 權限語意而恆紅的上游測試 |
+| `tools/check_divergence.py` | 新增：比對「上游持有檔案實際被改過的清單」與 `docs/DIVERGENCE.md` 登記的清單，兩邊對不上就非 0 退出 |
+| `tools/dev_check.ps1` | 新增：Windows 本機一鍵 gate（時區資料庫前檢 → ruff → ruff format → pytest → `scripts/check.py` → `check_links.py` → `check_divergence.py`） |
 | `tools/upstream_baseline.json` | 新增：見 [`docs/DECISIONS.md`](docs/DECISIONS.md) |
-| `tests/test_fork_*.py` | 新增：上面三支工具的合約測試（`fork_` 前綴避免撞上游 `tests/` 檔名） |
+| `tests/test_fork_*.py` | 新增：上面工具的合約測試（`fork_` 前綴避免撞上游 `tests/` 檔名） |
 | `docs/DECISIONS.md` | 新增：本 fork 的維護決策記錄 |
+| `docs/DIVERGENCE.md` | 新增：逐檔登記本 fork 對上游持有檔案的修改與跟進上游時的判準，見上一項政策說明 |
 | `ruff.toml` | 修改：`src` 陣列追加 `"tools"`（讓 `tools/` 的 import 排序正確） |
 | `.gitignore` | 修改：append 一個 fork 區塊，忽略兩份生成報告 |
+| `requirements-dev.txt` | 修改：`ruff` 跟到 PyPI 最新版；新增 `tzdata`（帶 `sys_platform == "win32"` 環境標記）。詳見 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md) |
+| `.github/workflows/ci.yml` | 修改：三個 Action 從浮動 tag 改成釘 commit SHA + `# vX.Y.Z` 註解。詳見 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md) |
+| `commerce-common/tests/test_memory_stores.py` | 修改：一筆 POSIX 權限斷言改成平台條件式，不再靠 `--deselect`。詳見 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md) |
 
 產品 `commerce-common/`、`shopping-agent/`、`merchant-agent/`、`examples/`、`plugins/`、
 `.claude-plugin/`、`docs/{safety,backends,deployment}.md`、`scripts/`、`conftest.py`、
-`requirements.txt`、`requirements-dev.txt`、`pytest.ini`、`.env.example`、
-`.github/workflows/ci.yml`、`LICENSE` 以上游為準，除非有已記錄的 fork 修正——目前沒有。
-Windows 需要的額外依賴走本 fork 自己的 `requirements-dev-windows.txt`，不改上游那兩份。
+`requirements.txt`、`pytest.ini`、`.env.example`、`LICENSE` 以上游為準，除非有已記錄的
+fork 修正；`requirements-dev.txt` 與 `.github/workflows/ci.yml` 目前**有**已記錄的修正
+（見上表與 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md)）。Windows 需要的額外依賴（`tzdata`）
+已直接併入 `requirements-dev.txt` 本身，不再另開繞道檔。
 
 ## 分支與 remote
 

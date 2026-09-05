@@ -3,6 +3,7 @@
 
 """The two stores, the purge contract, and the retention wrapper over either."""
 
+import os
 import stat
 from datetime import UTC, datetime, timedelta
 
@@ -74,7 +75,13 @@ async def test_clear_purges_one_subject_and_advances_only_their_generation(store
 async def test_the_file_store_is_owner_only_and_keeps_purge_generations_across_instances(tmp_path):
     path = tmp_path / "memory.json"
     await JsonFileMemoryStore(path).upsert_facts("u-1", [fact("k")])
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    # Windows has no POSIX owner/group/other permission bits, so the 0o600 the store
+    # requests via os.open() is not a promise that platform can keep; this fork asserts
+    # it only where the platform has the semantics to back it, per docs/DIVERGENCE.md.
+    # Everything else this test checks (purge generations persisting across a fresh
+    # instance) still runs and is verified on every platform.
+    if os.name != "nt":
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
     await JsonFileMemoryStore(path).clear("u-1")
     reopened = JsonFileMemoryStore(path)
     assert await reopened.purge_generation("u-1") == 1 and await reopened.get_facts("u-1") == []

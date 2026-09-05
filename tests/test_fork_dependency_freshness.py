@@ -51,21 +51,23 @@ def test_hold_marker_is_read_off_the_declaring_line() -> None:
 
 
 def test_every_fork_owned_requirements_file_is_checked() -> None:
-    """The Windows-only pin is a declaration this fork owns, so it must be read here.
+    """`requirements-dev.txt` is the only declaration file this fork checks now.
 
-    Adding `requirements-dev-windows.txt` to the repo without adding it to
-    REQUIREMENT_FILES would leave its `tzdata` pin ageing with nothing watching it.
+    The Windows-only `tzdata` pin used to live in a fork-only sibling file so upstream's
+    `requirements-dev.txt` stayed at zero diff; that policy was retired (see
+    docs/DIVERGENCE.md), and `tzdata` was folded into `requirements-dev.txt` itself behind
+    an environment marker. `REQUIREMENT_FILES` must therefore be exactly this one file, and
+    `tzdata` must still be read out of it (with the marker stripped) so its pin does not
+    age with nothing watching it.
     """
-    assert set(checker.REQUIREMENT_FILES) == {
-        "requirements-dev.txt",
-        "requirements-dev-windows.txt",
-    }
+    assert checker.REQUIREMENT_FILES == ("requirements-dev.txt",)
     for name in checker.REQUIREMENT_FILES:
         assert (checker.REPO_ROOT / name).is_file(), f"{name} is checked but missing"
 
     packages = checker.load_direct_dependencies()
-    sources = {package["name"]: package["source"] for package in packages}
-    assert sources.get("tzdata") == "requirements-dev-windows.txt"
+    by_name = {package["name"]: package for package in packages}
+    assert by_name["tzdata"]["source"] == "requirements-dev.txt"
+    assert by_name["tzdata"]["minimum"] == "2026.3"
 
 
 def test_a_requirements_include_line_is_not_expanded() -> None:
@@ -181,16 +183,11 @@ def test_missing_deferrals_file_is_not_an_error(tmp_path: Path) -> None:
 
 
 def test_the_repos_own_deferrals_file_parses() -> None:
-    """`.github/dependency-deferrals.json` covers the four rows that only upstream's
-    own `ci.yml` and `requirements-dev.txt` pin, none of which this fork may edit
-    (see docs/DECISIONS.md)."""
-    deferrals = checker.load_deferrals()
-    assert set(deferrals) == {
-        "ruff",
-        "actions/checkout",
-        "actions/setup-python",
-        "actions/setup-node",
-    }
+    """This fork now raises its own declared floors directly instead of waiting on
+    upstream's pace (see docs/DIVERGENCE.md), so `.github/dependency-deferrals.json`
+    starts empty; a deferral is reserved for a floor that would genuinely break
+    something if raised right now, not for "waiting on upstream"."""
+    assert checker.load_deferrals() == {}
 
 
 def test_report_names_both_exits_so_the_next_person_does_not_invent_a_third() -> None:

@@ -41,27 +41,31 @@ function Invoke-Step {
 Invoke-Step -Label "Ruff check" -Exe $pythonExe -Arguments @("-m", "ruff", "check", ".")
 Invoke-Step -Label "Ruff format --check" -Exe $pythonExe -Arguments @("-m", "ruff", "format", "--check", ".")
 # Windows CPython ships no system IANA time zone database, so the suite's clock tests
-# fail unless `tzdata` (requirements-dev-windows.txt) is installed. Fail here with the
-# fix rather than four confusing ValidationErrors 10 seconds later.
+# fail unless `tzdata` (requirements-dev.txt, Windows-only via an environment marker;
+# see docs/DIVERGENCE.md) is installed. Fail here with the fix rather than four
+# confusing ValidationErrors 10 seconds later.
 & $pythonExe -c "import zoneinfo; zoneinfo.ZoneInfo('Europe/Lisbon')" 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    throw "No IANA time zone database. Run: $pythonExe -m pip install -r requirements-dev-windows.txt"
+    throw "No IANA time zone database. Run: $pythonExe -m pip install -r requirements-dev.txt"
 }
 
-# One upstream test asserts POSIX 0o600 file permissions, which Windows has no equivalent
-# for; it is green on upstream's Ubuntu CI and red here for the platform, not for a
-# regression. Deselected rather than edited: the file is upstream-held (see AGENTS.md).
-$windowsOnlyDeselect = "commerce-common/tests/test_memory_stores.py::" +
-    "test_the_file_store_is_owner_only_and_keeps_purge_generations_across_instances"
-Invoke-Step -Label "Pytest" -Exe $pythonExe -Arguments @(
-    "-m", "pytest", "-q", "--deselect", $windowsOnlyDeselect
-)
+# One upstream test asserted POSIX 0o600 file permissions, which Windows has no
+# equivalent for. It is now fixed at the test-condition level (platform-conditional
+# assertion, not a `--deselect`) -- see docs/DIVERGENCE.md for why and how -- so a
+# plain `pytest -q` is the real, unmodified gate.
+Invoke-Step -Label "Pytest" -Exe $pythonExe -Arguments @("-m", "pytest", "-q")
 Invoke-Step -Label "Repo consistency checks (scripts/check.py)" -Exe $pythonExe -Arguments @("scripts\check.py")
 
 Write-Host "==> Check Markdown links (tools/check_links.py)"
 & $pythonExe "tools\check_links.py"
 if ($LASTEXITCODE -ne 0) {
     throw "Check Markdown links failed with exit code $LASTEXITCODE"
+}
+
+Write-Host "==> Check divergence registry (tools/check_divergence.py)"
+& $pythonExe "tools\check_divergence.py"
+if ($LASTEXITCODE -ne 0) {
+    throw "Check divergence registry failed with exit code $LASTEXITCODE"
 }
 
 Write-Host "WINDOWS DEV CHECK GREEN"

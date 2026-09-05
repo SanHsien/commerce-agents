@@ -10,6 +10,48 @@ upstream changes are tracked through `tools/check_upstream_updates.py` and
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-05
+
+Policy reversal: this fork no longer keeps declared dependencies behind upstream or
+routes around a red test just to hold zero diff against an upstream-owned file.
+Dependencies now track upstream's latest release directly, a red test gets its test
+condition fixed rather than deselected, and every divergence from upstream is recorded
+in a new `docs/DIVERGENCE.md`, machine-enforced for consistency. See the second entry
+dated this day in [`docs/DECISIONS.md`](docs/DECISIONS.md).
+
+### Added
+
+- `docs/DIVERGENCE.md`: a per-file registry of this fork's changes to upstream-owned
+  files, with an actionable rule for each row for handling it at the next upstream sync.
+- `tools/check_divergence.py`: compares "upstream-owned files actually changed since
+  the baseline commit" against what `docs/DIVERGENCE.md` registers, and exits non-zero
+  on any mismatch; wired into `tools/dev_check.ps1` and
+  `.github/workflows/upstream-check.yml`. `tests/test_fork_divergence.py` is its
+  contract test suite.
+
+### Changed
+
+- `requirements-dev.txt` (upstream-owned, now edited directly): `ruff` raised to
+  `0.16.6`; added a `tzdata==2026.3` line gated by a `sys_platform == "win32"`
+  environment marker.
+- `.github/workflows/ci.yml` (upstream-owned, now edited directly): all three Actions
+  (`checkout` x3, `setup-python` x2, `setup-node` x1) repinned from a floating tag to a
+  commit SHA with a `# vX.Y.Z` comment.
+- `commerce-common/tests/test_memory_stores.py` (upstream-owned, now edited directly):
+  the POSIX `0o600` permission assertion is now platform-conditional
+  (`if os.name != "nt":`) instead of being deselected wholesale.
+- `tools/dev_check.ps1`: removed `--deselect` from the `pytest` step; added a
+  `check_divergence.py` step.
+- `tools/check_dependency_freshness.py`: `REQUIREMENT_FILES` reverted to just
+  `requirements-dev.txt`.
+- `.github/dependency-deferrals.json`: cleared the four "waiting on upstream"
+  deferrals.
+
+### Removed
+
+- `requirements-dev-windows.txt`: `tzdata` is now folded into `requirements-dev.txt`
+  itself.
+
 ## [0.1.0] - 2026-09-05
 
 ### Added
@@ -45,4 +87,5 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `upstream-review-report.md` and `dependency-freshness-report.md`.
 - `ruff.toml`: appended `"tools"` to the `src` array.
 
+[0.2.0]: https://github.com/SanHsien/commerce-agents/releases/tag/v0.2.0
 [0.1.0]: https://github.com/SanHsien/commerce-agents/releases/tag/v0.1.0

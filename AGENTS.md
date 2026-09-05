@@ -57,20 +57,22 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
   可讀版本。
 - **不開分支、不開 PR**：日常修改驗證通過後直接推 `origin/main`；`upstream/main` 只 fetch、
   不推送、不 force-push、不刪除。
-- **Windows 開發環境**：`python -m venv .venv` 後裝
-  [`requirements-dev-windows.txt`](requirements-dev-windows.txt)（＝`requirements-dev.txt`
-  再加 `tzdata`），**不要**只裝 `requirements-dev.txt`。Windows 版 CPython 沒有系統 IANA
-  時區資料庫，少了 `tzdata` 會有 4 個上游時鐘測試在本機紅、在上游 Ubuntu CI 綠。
-- **已知的 Windows 平台限制（不是回歸）**：
+- **Windows 開發環境**：`python -m venv .venv` 後裝 `requirements-dev.txt`。Windows 版
+  CPython 沒有系統 IANA 時區資料庫，`requirements-dev.txt` 已經直接內建一行帶
+  `sys_platform == "win32"` 環境標記的 `tzdata`（只在 Windows 安裝），不再需要另一份
+  Windows 專屬的 requirements 檔——這是 2026-09-05 的政策轉向，見
+  [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md) 與 [`docs/DECISIONS.md`](docs/DECISIONS.md)。
+- **已知的 Windows 平台限制（不是回歸，已修測試條件而非繞過）**：
   `commerce-common/tests/test_memory_stores.py::test_the_file_store_is_owner_only_and_keeps_purge_generations_across_instances`
-  斷言檔案權限是 POSIX 的 `0o600`，Windows 沒有這個語意，本機恆紅（`0o666`）。上游 CI 在
-  Ubuntu 上是綠的。**不要為了讓它綠而改上游測試檔**（會變成每次同步的衝突點）；本機驗收用
-  `pytest -q --deselect commerce-common/tests/test_memory_stores.py::test_the_file_store_is_owner_only_and_keeps_purge_generations_across_instances`
-  ，並以上游 `ci.yml` 的 Ubuntu 結果為準。
+  原本無條件斷言檔案權限是 POSIX 的 `0o600`，Windows 沒有這個語意。本 fork 把這一行斷言
+  包進 `if os.name != "nt":`，其餘斷言（purge generations 跨實例存續）在 Windows 上照常
+  驗證；**不再用 `pytest --deselect` 整支跳過**。登記與判準見
+  [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md)。
 - **Windows 本機與 CI 的 canonical gate** 是 [`tools/dev_check.ps1`](tools/dev_check.ps1)：
-  `ruff check` → `ruff format --check` → `pytest` → `python scripts/check.py`；上游既有的
+  `ruff check` → `ruff format --check` → `pytest` → `python scripts/check.py` →
+  `tools/check_links.py` → `tools/check_divergence.py`；上游既有的
   `.github/workflows/ci.yml`（Ubuntu，兩個 Python 版本 + web build + no-pypi-fallback）維持
-  不動，不重複覆蓋。
+  不動的部分，見 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md) 例外（釘選的 Action SHA 已改）。
 - **上游同步**：`tools/check_upstream_updates.py` 讀寫 `tools/upstream_baseline.json` 的
   commit／PR／issue 三軸水位，PR／issue 一律用 `--state all` 查。上游關閉了 GitHub Issues，
   issue 軸恆回報「未檢查」而非「沒有新項目」，兩者不可混為一談。決策記錄見
@@ -79,10 +81,14 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
   `requirements-dev.txt` 對 PyPI、`.github/workflows/*.yml` 裡釘選的 GitHub Action 對
   Releases API。`examples/package-lock.json` 的 npm 依賴不查（上游持有的 pin 檔，理由見
   [`docs/DECISIONS.md`](docs/DECISIONS.md)）。
-- **產品內容以上游為準**：`commerce-common/`、`shopping-agent/`、`merchant-agent/`、
-  `examples/`、`plugins/`、`.claude-plugin/`、`docs/{safety,backends,deployment}.md`、
-  `scripts/`、`requirements*.txt`、`pytest.ini`、`.env.example`、`LICENSE`、
-  `.github/workflows/ci.yml` 不因本線維護需求改寫，除非有已記錄的 fork 修正——目前沒有。
+- **產品內容以上游為準，但依賴與釘選版本直接跟上游最新版走**：`commerce-common/`、
+  `shopping-agent/`、`merchant-agent/`、`examples/`、`plugins/`、`.claude-plugin/`、
+  `docs/{safety,backends,deployment}.md`、`scripts/`、`requirements.txt`、`pytest.ini`、
+  `.env.example`、`LICENSE` 不因本線維護需求改寫。`requirements-dev.txt`（ruff 版本、
+  `tzdata`）與 `.github/workflows/ci.yml`（三個 Action 釘 SHA）**有**已記錄的 fork
+  修正——2026-09-05 起不再因為「這是上游持有的檔案」而保留落後版本或繞道，登記與跟進上游時
+  的判準見 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md)，由
+  [`tools/check_divergence.py`](tools/check_divergence.py) 機器強制此表與實際改動一致。
 - **文件語言**：本 fork 新增的維護文件（本檔、`FORK.md`、`NOTICE.md`、`README.md`、
   `CHANGELOG.md`、`docs/DECISIONS.md` 等）用繁體中文；產品程式碼、prompt、skill、範例的語言
   跟隨上游（英文），不因本線需求翻譯。

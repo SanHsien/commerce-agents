@@ -2,6 +2,11 @@
 
 ## 2026-09-05：Windows 的測試落差用「加一支 fork 自有的 requirements」與「deselect」處理，不改上游檔
 
+> ⚠️ **本決策已被下方「2026-09-05：依賴與測試條件政策轉向」取代。** 保留原文於此作為歷史
+> 記錄，不刪除；本 fork 現在的實際做法是把 `tzdata` 直接併入 `requirements-dev.txt`、把
+> POSIX 權限斷言改成平台條件式測試，不再維護 `requirements-dev-windows.txt`、不再用
+> `--deselect`。見下方新決策與 [`docs/DIVERGENCE.md`](DIVERGENCE.md)。
+
 **背景**：在 Windows 11 上跑 `pytest -q`，1145 筆裡有 5 筆紅，全部落在上游測試檔：
 
 - 4 筆（`tests/test_turn_loop.py` 三筆、`merchant-agent/runtime-messages-api/tests/test_scheduled_digest.py`
@@ -167,3 +172,49 @@ open 的 pull request（`#1`–`#4`），依循範本的慣例（見「建立 Wi
 **下一次同步時要做的事**：`git fetch upstream`，跑 `tools/check_upstream_updates.py --strict`
 或讀 `upstream-check.yml` 開的 issue，對每一筆新 commit／PR 決定引用或不引用並記錄在本檔，
 驗證通過後才推進 `reviewed_through` / `reviewed_pr_through`。
+
+## 2026-09-05：依賴與測試條件政策轉向——不再為了與上游零 diff 而保留落後版本或繞道
+
+**決定**：維護者推翻了本檔最上面那則「Windows 的測試落差用『加一支 fork 自有的
+requirements』與『deselect』處理，不改上游檔」的決策。新政策四點：
+
+1. 依賴直接跟上游最新版走，不因為「宣告檔是上游持有的」就保留落後版本或另開繞道檔。
+2. 測試因此變紅就改測試條件，不用 deselect／skip 繞過。
+3. 每一處與上游的差異都在 repo 裡登記清楚，登記到「日後跟進上游時不必重新評估判斷」的
+   程度——見新建的 [`docs/DIVERGENCE.md`](DIVERGENCE.md)。
+4. 接受這個 fork 終究會與上游分岔，這是預期結果不是風險。
+
+**落地內容**：
+
+- `requirements-dev.txt`（上游持有，現在直接改）：`ruff` 從 `0.16.3` 跟到 PyPI 當時最新的
+  `0.16.6`（已實測 `ruff check .` 與 `ruff format --check .` 在全部 219 個檔案上零差異）；
+  新增一行帶 `sys_platform == "win32"` 環境標記的 `tzdata==2026.3`，取代原本獨立的
+  `requirements-dev-windows.txt`（已刪除，連同 `tools/check_dependency_freshness.py` 的
+  `REQUIREMENT_FILES`、`tests/test_fork_dependency_freshness.py`、
+  `.github/workflows/dependency-freshness.yml` 的 `paths:` 都一併改回只認
+  `requirements-dev.txt`）。
+- `.github/workflows/ci.yml`（上游持有，現在直接改）：三個 Action（`actions/checkout`
+  ×3、`actions/setup-python` ×2、`actions/setup-node` ×1）從浮動 tag 改成釘 commit SHA +
+  `# vX.Y.Z` 註解，對齊本 fork 自有 workflow 的釘選風格。
+- `commerce-common/tests/test_memory_stores.py`（上游持有，現在直接改）：
+  `test_the_file_store_is_owner_only_and_keeps_purge_generations_across_instances` 那筆
+  `0o600` 斷言包進 `if os.name != "nt":`，Windows 上跳過這一行、其餘斷言（purge
+  generations 跨實例存續）照常驗證；`tools/dev_check.ps1` 的 `pytest -q` 移除
+  `--deselect`。
+- `.github/dependency-deferrals.json` 的四筆 deferral（ruff、三個 Action）清空：那些
+  deferral 記錄的理由是「等上游先升」，新政策下這個理由不再成立——本線直接自己升版，不再
+  等上游。
+- 新增 [`docs/DIVERGENCE.md`](DIVERGENCE.md)：逐檔登記本 fork 對上游持有檔案的修改，並由
+  新增的 [`tools/check_divergence.py`](../tools/check_divergence.py) 機器比對「上游基準
+  commit 到現在，上游持有檔案實際被改過的清單」與這張表登記的清單，兩邊對不上就非 0 退出；
+  接進 `tools/dev_check.ps1` 與 `.github/workflows/upstream-check.yml`（該 job 的 checkout
+  已經是 `fetch-depth: 0`，不用額外調整）。
+
+**理由**：舊政策把「上游檔案零 diff」當成目標本身，代價是依賴版本落後、Windows 測試用
+deselect 繞過而不是修好、每次同步都要重新判斷哪些繞道還有效。維護者判斷這個代價已經大於
+「零 diff 帶來的同步簡單」——本 fork 是單人維護、不回貢的 Windows-first 分支，跟上游分岔
+本來就是長期會發生的事，與其假裝零 diff、不如把每一處分岔寫清楚，讓分岔本身可審查、可機器
+驗證。
+
+**代價與防呆**：分岔清單會隨時間變長，只靠人工記憶容易漏登記或忘記刪除已經作廢的列；
+`tools/check_divergence.py` 把這個防呆變成機器檢查，而不是仰賴下一個維護者的記性。

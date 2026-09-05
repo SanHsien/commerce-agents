@@ -49,6 +49,9 @@ jobs:
         continue-on-error: true
         run: python tools/check_upstream_updates.py --strict
 
+      - name: Check divergence registry
+        run: python tools/check_divergence.py
+
       - name: Publish report
         if: always()
         run: cat upstream-review-report.md >> "$GITHUB_STEP_SUMMARY"

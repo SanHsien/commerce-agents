@@ -1,9 +1,10 @@
 """Compare declared dependency floors against their current upstream releases.
 
 This fork's *own* declared dependencies are the dev tools in `requirements-dev.txt`
-(pytest, ruff; everything else that file pulls in comes from `-r requirements.txt`, which
-upstream owns and pins exactly, not with a floor -- see the exclusion note below), the
-`tzdata` pin this maintenance line adds in `requirements-dev-windows.txt`, and the
+(pytest, ruff, and the Windows-only `tzdata` line this maintenance line added directly to
+that file -- see docs/DIVERGENCE.md for why it lives there now instead of a fork-only
+sibling file; everything else that file pulls in comes from `-r requirements.txt`, which
+upstream owns and pins exactly, not with a floor -- see the exclusion note below), and the
 pinned GitHub Actions used by `.github/workflows/*.yml`. Dependabot proposes upgrades one
 pull request at a time, which answers "is there a newer release?" but never "how far
 behind is what we declare, across every declaration in the repo?". This reads both
@@ -39,11 +40,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 USER_AGENT = "commerce-agents-dependency-freshness"
 
-# The declaration files this fork checks. `requirements-dev.txt` is upstream's;
-# `requirements-dev-windows.txt` is this maintenance line's own Windows-only addition, and
-# its pin drifts silently unless it is read here too. requirements.txt is not in this
-# list: see the module docstring for why exact upstream pins are excluded.
-REQUIREMENT_FILES = ("requirements-dev.txt", "requirements-dev-windows.txt")
+# The declaration files this fork checks. `requirements-dev.txt` is upstream's own file,
+# but this fork now edits it directly (ruff kept current, `tzdata` added for Windows; see
+# docs/DIVERGENCE.md) rather than keeping a separate Windows-only sibling. requirements.txt
+# is not in this list: see the module docstring for why exact upstream pins are excluded.
+REQUIREMENT_FILES = ("requirements-dev.txt",)
 
 _REQUIREMENT_RE = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(.*)$")
 _MINIMUM_RE = re.compile(r"(>=|>|==|~=)\s*([0-9][0-9A-Za-z.!+_-]*)")

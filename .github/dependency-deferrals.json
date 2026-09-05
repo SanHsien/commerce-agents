@@ -1,25 +1,4 @@
 {
-  "_comment": "Reviewed-but-not-now decisions for tools/check_dependency_freshness.py. Each entry needs deferredLatest so it expires by itself once upstream moves past the release it was reviewed against. A permanent policy belongs on the declaring line as `# freshness-hold:` instead.",
-  "deferrals": {
-    "ruff": {
-      "deferredLatest": "0.16.6",
-      "reason": "requirements-dev.txt 是上游持有的釘選檔（本 fork 不改），本行的 ruff==0.16.3 因此不能直接跟著改。CI 與本機 ruff.toml 設定都相容 0.16.x，等上游自己升版再跟。requirements-dev-windows.txt 雖然是本 fork 自有的宣告檔，但它的範圍僅限「Windows 缺少的平台能力」（tzdata），不拿來覆蓋上游的工具版本——那會讓本機 lint 結果與上游 CI 分岐，是比落後三個 patch 版更糟的問題。",
-      "reviewedOn": "2026-09-05"
-    },
-    "actions/checkout": {
-      "deferredLatest": "7.0.1",
-      "reason": "只有上游自有的 .github/workflows/ci.yml 還釘浮動的 @v4；該檔屬上游產品內容，重新釘選是上游的決定，本 fork 不改。本線自有的 codeql.yml／dependency-freshness.yml／upstream-check.yml 已釘 v7.0.1 的 SHA。",
-      "reviewedOn": "2026-09-05"
-    },
-    "actions/setup-python": {
-      "deferredLatest": "7.0.0",
-      "reason": "同上：@v5 只出現在上游自有的 ci.yml。本線自有的 dependency-freshness.yml／upstream-check.yml 已釘 v7.0.0 的 SHA。",
-      "reviewedOn": "2026-09-05"
-    },
-    "actions/setup-node": {
-      "deferredLatest": "7.0.0",
-      "reason": "同上：@v4 只出現在上游自有的 ci.yml。本 fork 目前沒有自己的 workflow 用到 setup-node，純粹是上游版本落後，不是本線的釘選。",
-      "reviewedOn": "2026-09-05"
-    }
-  }
+  "_comment": "Reviewed-but-not-now decisions for tools/check_dependency_freshness.py. A deferral is for a floor that would genuinely break something if raised right now, with the reason recorded here; it is not a place to park 'waiting for upstream to move first' -- this fork now raises its own declared floors directly (ruff, tzdata in requirements-dev.txt; pinned Actions in ci.yml) rather than waiting on upstream's pace. See docs/DIVERGENCE.md and the 2026-09-05 policy-reversal decision in docs/DECISIONS.md. Each entry still needs deferredLatest so it expires by itself once upstream moves past the release it was reviewed against; a permanent policy belongs on the declaring line as `# freshness-hold:` instead.",
+  "deferrals": {}
 }

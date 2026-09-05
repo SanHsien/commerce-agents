@@ -85,12 +85,13 @@ claude
 ## 驗證
 
 ```powershell
-.venv\Scripts\python.exe -m pip install -r requirements-dev-windows.txt
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .venv\Scripts\pwsh.exe -NoProfile -File tools\dev_check.ps1   # 或用系統 pwsh
 ```
 
 `tools/dev_check.ps1` 依序跑 `ruff check` → `ruff format --check` → `pytest` →
-`scripts/check.py` → `tools/check_links.py`，是本 fork 在 Windows 上的一鍵 gate。要逐項手跑：
+`scripts/check.py` → `tools/check_links.py` → `tools/check_divergence.py`，是本 fork 在
+Windows 上的一鍵 gate。要逐項手跑：
 
 ```powershell
 .venv\Scripts\python.exe -m ruff check .
@@ -99,14 +100,17 @@ claude
 .venv\Scripts\python.exe scripts\check.py
 ```
 
-`requirements-dev.txt`（上游持有）裝的是 pytest、pytest-asyncio 與 ruff；
-[`requirements-dev-windows.txt`](requirements-dev-windows.txt) 是本 fork 加的，多一個
-`tzdata`——Windows 版 CPython 沒有系統 IANA 時區資料庫，少了它會有 4 個上游時鐘測試在本機紅、
-在上游 Ubuntu CI 綠。本 fork 的維護工具只用標準函式庫，沒有新增任何 runtime 依賴。
+`requirements-dev.txt` 裝 pytest、pytest-asyncio、ruff（本 fork 直接跟上游最新版走，不因為
+「這是上游持有的宣告檔」保留落後版本），以及一行只在 Windows 安裝的 `tzdata`（帶
+`sys_platform == "win32"` 環境標記）——Windows 版 CPython 沒有系統 IANA 時區資料庫，少了它
+會有 4 個上游時鐘測試在本機紅、在上游 Ubuntu CI 綠。本 fork 的維護工具只用標準函式庫，沒有
+新增任何 runtime 依賴。
 
-還有一個上游測試在 Windows 上恆紅：`test_memory_stores.py` 裡驗證檔案權限是 POSIX `0o600`
-的那筆，Windows 沒有這個語意。這是平台限制不是回歸，`dev_check.ps1` 會把它 deselect 掉，理由
-與判準見 [`AGENTS.md`](AGENTS.md) 與 [`docs/DECISIONS.md`](docs/DECISIONS.md)。
+上游有一筆測試斷言檔案權限是 POSIX 的 `0o600`，Windows 沒有這個語意；本 fork 把這一行斷言
+改成平台條件式（Windows 上跳過，其餘照常驗證），不再靠 `--deselect` 整支跳過。這與
+`requirements-dev.txt`、`.github/workflows/ci.yml` 的差異一併登記在
+[`docs/DIVERGENCE.md`](docs/DIVERGENCE.md)，由 `tools/check_divergence.py` 機器檢查登記表
+與實際改動一致；決策脈絡見 [`docs/DECISIONS.md`](docs/DECISIONS.md)。
 
 ## 授權
 
