@@ -85,17 +85,23 @@ Windows 11 上可重現的開發／驗收骨架，以及繁中入口。授權是
 （`examples/`）兩個生態系 `open-pull-requests-limit: 0`，只保留 GitHub 安全性更新
 （Dependabot alerts）獨立生效，不受這個設定影響。
 
-**理由**：`requirements.txt` 與 `examples/package-lock.json` 都是**上游持有的鎖定檔**，鎖的
-是「這個版本的上游程式碼實測過」這件事，不是本 fork 的依賴選擇。`requirements.txt` 額外還有
-一個結構性理由：七個套件彼此用 `==<version>` 互相釘死（`scripts/check.py` 的
-`check_package_versions` 會檢查這件事），Dependabot 例行版本 PR 一次只會動一個套件，很容易
-把某個 sibling pin 動出鎖定範圍，製造一個 CI 會炸、但看起來像「正常的相依性更新」的假 PR。
-版本要不要動是上游的決定，不是這條維護線該自己決定的事。`github-actions` 沒有這個結構性
-耦合，PR 之間彼此獨立，維持正常開放。
+**理由**（2026-09-05 政策轉向後重述，決定本身不變）：這**不是**「等上游先動」——那個理由已被
+政策轉向廢除，本 fork 的開發工具宣告（`ruff`、`tzdata`、釘選的 Action）現在都直接跟最新版。
+留 `0` 的是**結構性**理由，與誰持有檔案無關：
+
+- `requirements.txt` 的七個套件彼此用 `==<version>` 互相釘死，`scripts/check.py` 的
+  `check_package_versions` 會檢查這個一致性。Dependabot 例行 PR 一次只動一個套件，會把某個
+  sibling pin 動出鎖定範圍，產生一個 CI 必炸、外觀卻像「正常相依性更新」的 PR。這類升級要
+  **整組一起改**才有意義，不是每個套件各開一個 PR。
+- `requirements.txt` 與 `examples/package-lock.json` 鎖的是**產品程式碼實測過的組合**，動它
+  是產品層決定，風險與升一個 lint 工具不同級。
+
+`github-actions` 沒有這個耦合，PR 彼此獨立，維持正常開放（上限 5）。
 
 **限制**：GitHub 的安全性更新（Dependabot security updates）與 `open-pull-requests-limit`
 無關，仍會照常對這兩個生態系開 PR；出現時照樣要讀 diff 才能合併，不能因為「這是安全性 PR」
-就跳過驗證。
+就跳過驗證。要整組升級 `requirements.txt` 時，做法是自己一次改完整組 pin、跑
+`tools/dev_check.ps1` 全綠、再在 [`DIVERGENCE.md`](DIVERGENCE.md) 加一列，不是放寬這個上限。
 
 ## 2026-09-05：依賴新鮮度檢查涵蓋 `requirements-dev.txt` 與 GitHub Actions，`examples/package-lock.json` 排除在外
 
