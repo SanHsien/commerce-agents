@@ -68,4 +68,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "Check divergence registry failed with exit code $LASTEXITCODE"
 }
 
+# Dependabot now opens pull requests against requirements.txt and requirements-dev.txt.
+# scripts/check.py never reads those files, so this is the only check that catches a bump
+# walking a pin outside a range some pyproject.toml declares.
+Write-Host "==> Check pins against declared ranges (tools/check_pin_bounds.py)"
+& $pythonExe "tools\check_pin_bounds.py"
+if ($LASTEXITCODE -ne 0) {
+    throw "Check pin bounds failed with exit code $LASTEXITCODE"
+}
+
 Write-Host "WINDOWS DEV CHECK GREEN"

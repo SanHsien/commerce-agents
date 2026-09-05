@@ -90,8 +90,8 @@ claude
 ```
 
 `tools/dev_check.ps1` 依序跑 `ruff check` → `ruff format --check` → `pytest` →
-`scripts/check.py` → `tools/check_links.py` → `tools/check_divergence.py`，是本 fork 在
-Windows 上的一鍵 gate。要逐項手跑：
+`scripts/check.py` → `tools/check_links.py` → `tools/check_divergence.py` →
+`tools/check_pin_bounds.py`，是本 fork 在 Windows 上的一鍵 gate。要逐項手跑：
 
 ```powershell
 .venv\Scripts\python.exe -m ruff check .
@@ -111,6 +111,11 @@ Windows 上的一鍵 gate。要逐項手跑：
 `requirements-dev.txt`、`.github/workflows/ci.yml` 的差異一併登記在
 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md)，由 `tools/check_divergence.py` 機器檢查登記表
 與實際改動一致；決策脈絡見 [`docs/DECISIONS.md`](docs/DECISIONS.md)。
+
+依賴更新走 Dependabot，三個生態系（`pip`／`npm`／`github-actions`）全開，用 `groups` 併成
+一個 PR、`ignore` 掉七個從本地路徑安裝的 in-repo 套件。`tools/check_pin_bounds.py` 會在每個
+PR 上比對 requirements 的 exact pin 與各 `pyproject.toml` 宣告的範圍——`scripts/check.py`
+不讀 requirements，這是唯一擋得住「pin 升出宣告範圍」的檢查。PR 一律人工讀 diff 後合併。
 
 ## 授權
 

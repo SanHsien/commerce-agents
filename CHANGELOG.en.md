@@ -28,6 +28,11 @@ dated this day in [`docs/DECISIONS.md`](docs/DECISIONS.md).
   on any mismatch; wired into `tools/dev_check.ps1` and
   `.github/workflows/upstream-check.yml`. `tests/test_fork_divergence.py` is its
   contract test suite.
+- `tools/check_pin_bounds.py` and `.github/workflows/pin-bounds.yml`: check every exact
+  pin in the requirements files against every range the `pyproject.toml` files declare,
+  on each pull request and in the local gate. `scripts/check.py` never reads the
+  requirements files, so this is the only check covering that coupling.
+  `tests/test_fork_pin_bounds.py` is its contract test suite.
 
 ### Changed
 
@@ -40,8 +45,13 @@ dated this day in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 - `commerce-common/tests/test_memory_stores.py` (upstream-owned, now edited directly):
   the POSIX `0o600` permission assertion is now platform-conditional
   (`if os.name != "nt":`) instead of being deselected wholesale.
-- `tools/dev_check.ps1`: removed `--deselect` from the `pytest` step; added a
-  `check_divergence.py` step.
+- `tools/dev_check.ps1`: removed `--deselect` from the `pytest` step; added the
+  `check_divergence.py` and `check_pin_bounds.py` steps.
+- `.github/dependabot.yml`: `pip` and `npm` raised from `open-pull-requests-limit: 0` to
+  `5`, so all three ecosystems now open pull requests; `groups` collapses a run into one
+  pull request and `ignore` excludes the seven in-repo packages. This also corrects an
+  earlier claim that a single-package pull request would break `scripts/check.py` — that
+  script never reads `requirements.txt`.
 - `tools/check_dependency_freshness.py`: `REQUIREMENT_FILES` reverted to just
   `requirements-dev.txt`.
 - `.github/dependency-deferrals.json`: cleared the four "waiting on upstream"

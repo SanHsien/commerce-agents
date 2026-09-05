@@ -13,15 +13,27 @@ updates:
       github-actions:
         patterns: ["*"]
 
-  # requirements.txt / requirements-dev.txt pin the seven in-repo packages and their
-  # exact runtime dependencies; scripts/check.py and the CI no-pypi-fallback job assert
-  # those seven names stay unregistered on the public index. A routine Dependabot pip PR
-  # would either try to bump a sibling pin out of lockstep with pyproject.toml (breaking
-  # the exact-pin invariant scripts/check.py enforces) or bump a runtime dependency the
-  # upstream release was never tested against. Upstream owns this file; a version bump
-  # is upstream's call, not a Dependabot PR on this fork. GitHub's security-advisory
-  # alerts (Dependabot alerts / security updates) are independent of this setting and
-  # still fire regardless of open-pull-requests-limit.
+  # requirements.txt / requirements-dev.txt track their upstream releases directly (this
+  # fork does not hold pins back; see docs/DIVERGENCE.md and the 2026-09-05 policy
+  # decisions). Three things keep that from turning into noise or broken pull requests:
+  #
+  #   groups             one pull request per run, not one per pin. 42 exact pins would
+  #                      otherwise mean up to 42 pull requests, each individually
+  #                      plausible and collectively unreviewable.
+  #   ignore             the seven in-repo packages install from local paths (`-e ./...`)
+  #                      and pin each other exactly, checked by scripts/check.py. They are
+  #                      unregistered on the public index -- the ci.yml no-pypi-fallback
+  #                      job asserts exactly that -- so a bump proposed for one of these
+  #                      names could only come from a squatter. Never take one.
+  #   separate groups    a dev-tool bump (pytest, ruff) is a different review from a
+  #                      runtime bump (anthropic, fastapi): one risks the gate, the other
+  #                      risks the product. Splitting them keeps a risky pull request from
+  #                      riding along with a trivial one.
+  #
+  # A bump that walks a pin outside a range some pyproject.toml declares is caught by
+  # tools/check_pin_bounds.py, which runs on every pull request (.github/workflows/
+  # pin-bounds.yml) and in the local gate. Dependabot pull requests are read and merged by
+  # hand -- no auto-merge.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -29,13 +41,26 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "Asia/Taipei"
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels: ["dependencies", "python"]
+    ignore:
+      - dependency-name: "commerce-common"
+      - dependency-name: "shopping-agent-core"
+      - dependency-name: "shopping-agent-runtime"
+      - dependency-name: "shopping-agent-sdk"
+      - dependency-name: "merchant-agent-core"
+      - dependency-name: "merchant-agent-runtime"
+      - dependency-name: "merchant-agent-sdk"
+    groups:
+      python-dev-tools:
+        patterns: ["pytest*", "ruff", "tzdata"]
+      python-runtime:
+        patterns: ["*"]
+        exclude-patterns: ["pytest*", "ruff", "tzdata"]
 
-  # examples/package-lock.json is the shared npm workspace lockfile for the eight
-  # example web apps; it is upstream product content, upgraded (or not) alongside the
-  # verticals it ships with. Same reasoning as pip above: routine bumps are upstream's
-  # call, not a Dependabot PR here. Security updates still fire independently.
+  # examples/package-lock.json is the shared npm workspace lockfile for the eight example
+  # web apps. Same policy as pip: track upstream releases, one grouped pull request per
+  # run, merged by hand after `npm run build` passes in CI (the `web` job).
   - package-ecosystem: "npm"
     directory: "/examples"
     schedule:
@@ -43,5 +68,10 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "Asia/Taipei"
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     labels: ["dependencies", "npm"]
+    groups:
+      npm-dev:
+        dependency-type: "development"
+      npm-production:
+        dependency-type: "production"

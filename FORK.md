@@ -31,7 +31,9 @@
 | `SECURITY.md` / `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` | 新增：短版，針對本 fork 的維護範圍 |
 | `.editorconfig` / `.gitattributes` | 新增：2 空格（`.py`/`.ps1` 4 空格）、LF 換行 |
 | `.cursor/rules/no-upstream-pr.mdc` | 新增：機器可讀的「對外只打 origin」規則 |
-| `.github/dependabot.yml` | 新增：`github-actions` 正常開 PR；`pip`（根）與 `npm`（`/examples`）因為是上游持有的 pin 檔，`open-pull-requests-limit: 0` |
+| `.github/dependabot.yml` | 新增：三個生態系（`github-actions`／`pip`／`npm`）全開，上限 5；用 `groups` 併成一個 PR、`ignore` 七個 in-repo 套件（未註冊在公開索引，提案只可能來自搶註者） |
+| `.github/workflows/pin-bounds.yml` | 新增：每個 PR 都跑 `tools/check_pin_bounds.py`，擋 Dependabot 把 pin 升出 pyproject 宣告範圍 |
+| `tools/check_pin_bounds.py` | 新增：比對兩份 requirements 的 exact pin 與所有 `pyproject.toml` 宣告的範圍（含唯一上界 `ruff>=0.15,<0.17`）；`scripts/check.py` 從不讀 requirements，這是唯一守得住這條的檢查 |
 | `.github/dependency-deferrals.json` | 新增：依賴新鮮度檢查的「已審查、暫不處理」記錄，初始為空結構 |
 | `.github/workflows/dependency-freshness.yml` | 新增：每月檢查 `requirements-dev.txt` 對 PyPI、workflow 釘選的 Action 對 GitHub Releases |
 | `.github/workflows/upstream-check.yml` | 新增：每週對 `upstream/main` 做未審查 commit／PR／issue 檢查 |
@@ -40,7 +42,7 @@
 | `tools/check_upstream_updates.py` | 新增：讀寫 `tools/upstream_baseline.json` 的四面向水位（commit／PR／issue／已知分支清單） |
 | `tools/check_links.py` | 新增：維護文件之間的相對連結檢查 |
 | `tools/check_divergence.py` | 新增：比對「上游持有檔案實際被改過的清單」與 `docs/DIVERGENCE.md` 登記的清單，兩邊對不上就非 0 退出 |
-| `tools/dev_check.ps1` | 新增：Windows 本機一鍵 gate（時區資料庫前檢 → ruff → ruff format → pytest → `scripts/check.py` → `check_links.py` → `check_divergence.py`） |
+| `tools/dev_check.ps1` | 新增：Windows 本機一鍵 gate（時區資料庫前檢 → ruff → ruff format → pytest → `scripts/check.py` → `check_links.py` → `check_divergence.py` → `check_pin_bounds.py`） |
 | `tools/upstream_baseline.json` | 新增：見 [`docs/DECISIONS.md`](docs/DECISIONS.md) |
 | `tests/test_fork_*.py` | 新增：上面工具的合約測試（`fork_` 前綴避免撞上游 `tests/` 檔名） |
 | `docs/DECISIONS.md` | 新增：本 fork 的維護決策記錄 |

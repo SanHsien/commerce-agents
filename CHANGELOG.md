@@ -21,6 +21,10 @@
 - `tools/check_divergence.py`：比對「上游持有檔案實際被改過的清單」與 `docs/DIVERGENCE.md`
   登記的清單，兩邊對不上就非 0 退出；接進 `tools/dev_check.ps1` 與
   `.github/workflows/upstream-check.yml`。`tests/test_fork_divergence.py` 是它的合約測試。
+- `tools/check_pin_bounds.py` 與 `.github/workflows/pin-bounds.yml`：比對兩份 requirements
+  的 exact pin 與所有 `pyproject.toml` 宣告的範圍，pin 掉出範圍就紅；跑在每個 PR 與本機
+  gate 上。`scripts/check.py` 從不讀 requirements，這是唯一守得住這條的檢查。
+  `tests/test_fork_pin_bounds.py` 是它的合約測試。
 
 ### Changed
 
@@ -30,7 +34,11 @@
   `setup-python` ×2、`setup-node` ×1）從浮動 tag 改成釘 commit SHA + `# vX.Y.Z` 註解。
 - `commerce-common/tests/test_memory_stores.py`（上游持有，現在直接改）：POSIX `0o600`
   權限斷言改成平台條件式（`if os.name != "nt":`），不再靠 `--deselect` 整支跳過。
-- `tools/dev_check.ps1`：`pytest` 移除 `--deselect`；新增 `check_divergence.py` 這一步。
+- `tools/dev_check.ps1`：`pytest` 移除 `--deselect`；新增 `check_divergence.py` 與
+  `check_pin_bounds.py` 兩步。
+- `.github/dependabot.yml`：`pip` 與 `npm` 從 `open-pull-requests-limit: 0` 改為 `5`，
+  三個生態系全開；加上 `groups`（一次一個 PR）與 `ignore`（七個 in-repo 套件）。同時訂正
+  先前「單套件 PR 會炸 `scripts/check.py`」的錯誤判斷——該腳本從不讀 `requirements.txt`。
 - `tools/check_dependency_freshness.py`：`REQUIREMENT_FILES` 改回只有
   `requirements-dev.txt` 一份。
 - `.github/dependency-deferrals.json`：四筆「等上游先升」的 deferral 清空。

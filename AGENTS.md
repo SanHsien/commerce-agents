@@ -70,7 +70,7 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
   [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md)。
 - **Windows 本機與 CI 的 canonical gate** 是 [`tools/dev_check.ps1`](tools/dev_check.ps1)：
   `ruff check` → `ruff format --check` → `pytest` → `python scripts/check.py` →
-  `tools/check_links.py` → `tools/check_divergence.py`；上游既有的
+  `tools/check_links.py` → `tools/check_divergence.py` → `tools/check_pin_bounds.py`；上游既有的
   `.github/workflows/ci.yml`（Ubuntu，兩個 Python 版本 + web build + no-pypi-fallback）維持
   不動的部分，見 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md) 例外（釘選的 Action SHA 已改）。
 - **上游同步**：`tools/check_upstream_updates.py` 讀寫 `tools/upstream_baseline.json` 的
@@ -79,8 +79,19 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
   [`docs/DECISIONS.md`](docs/DECISIONS.md)，同步流程見 [`FORK.md`](FORK.md)。
 - **依賴新鮮度**：`tools/check_dependency_freshness.py` 查兩個來源——
   `requirements-dev.txt` 對 PyPI、`.github/workflows/*.yml` 裡釘選的 GitHub Action 對
-  Releases API。`examples/package-lock.json` 的 npm 依賴不查（上游持有的 pin 檔，理由見
-  [`docs/DECISIONS.md`](docs/DECISIONS.md)）。
+  Releases API。`examples/package-lock.json` 的 npm 依賴不查（不同生態系，交給 Dependabot）。
+- **Dependabot 三個生態系全開**（`pip`／`npm`／`github-actions`，上限 5），靠三件事不亂炸：
+  `groups`（一次一個 PR，不是一個 pin 一個 PR）、`ignore` 七個 in-repo 套件（它們從本地路徑
+  安裝且**未註冊在公開索引**，`ci.yml` 的 `no-pypi-fallback` job 專門守這件事——針對這七個
+  名字的升級提案只可能來自搶註者，一律不接）、以及
+  [`tools/check_pin_bounds.py`](tools/check_pin_bounds.py)。
+- **`tools/check_pin_bounds.py` 是唯一擋得住「pin 掉出宣告範圍」的檢查**：`scripts/check.py`
+  **完全沒有讀 `requirements.txt`**，只看七個 `pyproject.toml` 之間的 sibling pin 一致性；
+  第三方套件在 pyproject 是範圍（`anthropic>=0.91`，以及唯一的上界 `ruff>=0.15,<0.17`），
+  在 requirements 是 exact pin，過去沒有東西比對兩者。此檢查跑在每個 PR
+  （`.github/workflows/pin-bounds.yml`）與本機 gate 上。pin 掉出範圍時**把 pyproject 的範圍
+  在同一個變更裡一起提高並登記分岔**，不要關掉檢查。
+- **Dependabot PR 一律人工讀 diff 後合併，不開 auto-merge。**
 - **產品內容以上游為準，但依賴與釘選版本直接跟上游最新版走**：`commerce-common/`、
   `shopping-agent/`、`merchant-agent/`、`examples/`、`plugins/`、`.claude-plugin/`、
   `docs/{safety,backends,deployment}.md`、`scripts/`、`requirements.txt`、`pytest.ini`、

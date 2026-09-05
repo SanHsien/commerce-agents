@@ -79,29 +79,47 @@ Windows 11 上可重現的開發／驗收骨架，以及繁中入口。授權是
 （`AGENTS.md`，本 fork 自己的檔案，上游不會動）＋`CLAUDE.md` 只加薄補丁，上游更新
 `CLAUDE.md` 時可以幾乎無腦地在補丁下方重新貼上新內容，衝突面只剩一個固定的插入點。
 
-## 2026-09-05：`.github/dependabot.yml` 的 `pip` 與 `npm` 生態系 `open-pull-requests-limit: 0`
+## 2026-09-05：`pip` 與 `npm` 也開放 Dependabot，用分組與 pin-bounds 檢查取代「關掉」
 
-**決定**：`github-actions` 生態系正常開 PR（上限 5）；`pip`（根目錄）與 `npm`
-（`examples/`）兩個生態系 `open-pull-requests-limit: 0`，只保留 GitHub 安全性更新
-（Dependabot alerts）獨立生效，不受這個設定影響。
+**決定**：三個生態系全部正常開 PR（上限 5）。`pip` 與 `npm` 從 `open-pull-requests-limit: 0`
+改為 `5`，並加上三道防護：
 
-**理由**（2026-09-05 政策轉向後重述，決定本身不變）：這**不是**「等上游先動」——那個理由已被
-政策轉向廢除，本 fork 的開發工具宣告（`ruff`、`tzdata`、釘選的 Action）現在都直接跟最新版。
-留 `0` 的是**結構性**理由，與誰持有檔案無關：
+1. **`groups`**：一次跑一個 PR，不是一個 pin 一個 PR。42 個 exact pin 若不分組會產生最多
+   42 個 PR，每個看起來都合理、合起來沒人審得動。`pip` 分成 `python-dev-tools`
+   （pytest／ruff／tzdata）與 `python-runtime`（其餘）兩組，因為升 lint 工具與升 runtime
+   套件是兩種不同的審查：一個賭閘門，一個賭產品。`npm` 依 `dependency-type` 分 dev／production。
+2. **`ignore` 七個 in-repo 套件**：它們從本地路徑 `-e ./...` 安裝、彼此 exact pin，
+   `scripts/check.py` 已經在管，而且 `ci.yml` 的 `no-pypi-fallback` job 專門斷言這七個名字
+   **沒有註冊在公開索引上**——所以任何針對這七個名字的升級提案只可能來自搶註者，一律不接。
+3. **`tools/check_pin_bounds.py`**：比對兩份 requirements 的 exact pin 與所有
+   `pyproject.toml` 宣告的範圍，pin 掉出範圍就紅。跑在 `.github/workflows/pin-bounds.yml`
+   的**每一個 PR**上，以及本機 `tools/dev_check.ps1`。
 
-- `requirements.txt` 的七個套件彼此用 `==<version>` 互相釘死，`scripts/check.py` 的
-  `check_package_versions` 會檢查這個一致性。Dependabot 例行 PR 一次只動一個套件，會把某個
-  sibling pin 動出鎖定範圍，產生一個 CI 必炸、外觀卻像「正常相依性更新」的 PR。這類升級要
-  **整組一起改**才有意義，不是每個套件各開一個 PR。
-- `requirements.txt` 與 `examples/package-lock.json` 鎖的是**產品程式碼實測過的組合**，動它
-  是產品層決定，風險與升一個 lint 工具不同級。
+Dependabot 的 PR 一律人工讀 diff 後合併，不開 auto-merge。
 
-`github-actions` 沒有這個耦合，PR 彼此獨立，維持正常開放（上限 5）。
+**訂正一筆先前的錯誤判斷**：本檔原先寫「Dependabot 例行 PR 會把某個 sibling pin 動出鎖定
+範圍，製造 CI 必炸的假 PR」——**這是錯的**。實際查證：`scripts/check.py` 從頭到尾沒有讀
+`requirements.txt`（`grep -n requirements scripts/check.py` 零命中），`check_package_versions`
+只讀七個 `pyproject.toml`；而那七個套件在 requirements 裡是 `-e ./path` 形式，Dependabot
+不會、也無法對它們提出版本升級。當時的「必炸」是憑檔案結構推測、沒有實際讀那支檢查程式就
+下的結論。真正存在的風險只有三個（PR 數量、pin 掉出 pyproject 宣告範圍、搶註者對七個名字
+提案），上面三道防護各對應一個。
 
-**限制**：GitHub 的安全性更新（Dependabot security updates）與 `open-pull-requests-limit`
-無關，仍會照常對這兩個生態系開 PR；出現時照樣要讀 diff 才能合併，不能因為「這是安全性 PR」
-就跳過驗證。要整組升級 `requirements.txt` 時，做法是自己一次改完整組 pin、跑
-`tools/dev_check.ps1` 全綠、再在 [`DIVERGENCE.md`](DIVERGENCE.md) 加一列，不是放寬這個上限。
+**保留的舊決定與理由**（作為歷史）：原本 `pip`／`npm` 設 `0`，理由是「鎖檔鎖的是上游實測過的
+組合，版本要不要動是上游的決定」。政策轉向後這個理由不成立——本 fork 現在自己決定版本，
+測試紅就修，差異登記在 [`DIVERGENCE.md`](DIVERGENCE.md)。
+
+**限制**：
+
+- `tools/check_pin_bounds.py` 只比對**宣告與 pin 的一致性**，不保證新版本行為相容——那是
+  `pytest`、`scripts/check.py` 與 `ci.yml` 的 `web` build 的工作。三者都綠才算可合併。
+- 它的版本比較只涵蓋這個 repo 實際用到的運算子（`>=`／`>`／`<=`／`<`／`==`／`!=`／`~=`）
+  的數值 release 段，不是完整的 PEP 440 實作（那要 `packaging` 依賴，本工具堅持只用標準
+  函式庫）。**看不懂的宣告回報 `unparsable` 而不是放行**——靜默略過看不懂的東西，等於在最
+  可能出事的那一類上報綠。
+- Dependabot 的安全性更新與 `open-pull-requests-limit` 無關，本來就會開 PR；照樣要讀 diff。
+- pin 掉出宣告範圍時，正確做法是**同一個變更裡把 pyproject 的範圍一起提高**，並在
+  [`DIVERGENCE.md`](DIVERGENCE.md) 補一列（那會多動一個上游檔案），不是把檢查關掉。
 
 ## 2026-09-05：依賴新鮮度檢查涵蓋 `requirements-dev.txt` 與 GitHub Actions，`examples/package-lock.json` 排除在外
 
