@@ -126,6 +126,8 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "requirements-dev.txt",
         ".github/workflows/ci.yml",
         "commerce-common/tests/test_memory_stores.py",
+        "examples/package.json",
+        "examples/web-shared/storefront/orders.tsx",
     }
 
 

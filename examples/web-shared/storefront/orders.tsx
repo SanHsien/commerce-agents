@@ -12,6 +12,7 @@ import { type ReactNode, useState } from "react";
 import { formatDayMonth, formatMoney, formatWeekday, plural } from "../format";
 import type { Order } from "../protocol";
 import { AskButton, Notice, PageHeader, Panel, Pill, Segmented, Skeleton, type Tone } from "../ui";
+import { splitEstimate } from "./estimate.mjs";
 import { useStoreFrame } from "./frame";
 import { MoreLink } from "./home";
 import { StorePage } from "./Shell";
@@ -45,11 +46,11 @@ export function upcoming(orders: Order[]): Order[] {
 export function estimateOf(order: Order): { date: string; note: string | null } | null {
   const raw = order.estimated_delivery;
   if (!raw) return null;
-  const match = /^(\S+)\s*\((.*)\)\s*$/.exec(raw);
-  const date = match ? match[1] : raw;
+  const split = splitEstimate(raw);
+  const date = split?.date ?? raw;
   return {
     date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? formatWeekday(date) : date,
-    note: match ? match[2].replace(ISO_DAY, formatDayMonth) : null,
+    note: split ? split.note.replace(ISO_DAY, formatDayMonth) : null,
   };
 }
 

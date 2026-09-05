@@ -7,6 +7,7 @@
     "*/merchant-web"
   ],
   "scripts": {
+    "prebuild": "node --test web-shared/storefront/*.test.mjs",
     "build": "npm run build --workspaces --if-present"
   }
 }
