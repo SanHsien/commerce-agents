@@ -1,3 +1,11 @@
+> **Fork notice (SanHsien maintenance line):** this is a Windows-first maintenance fork of
+> [`anthropics/commerce-agents`](https://github.com/anthropics/commerce-agents). The single
+> source of truth for AI agents here is [`AGENTS.md`](AGENTS.md) (Traditional Chinese); read
+> it first. Fork boundary: never push, open a PR, or release against the upstream repo —
+> only `origin` (`SanHsien/commerce-agents`), unless the maintainer explicitly agrees to
+> contribute upstream in the current conversation. Reply to the maintainer in Traditional
+> Chinese. Everything below this notice is the upstream file, unchanged.
+
 # commerce-agents
 
 For agents working in this repo, commerce-builder plugin users included. The public

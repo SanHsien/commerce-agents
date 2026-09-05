@@ -1,0 +1,10 @@
+{
+  "repo": "https://github.com/anthropics/commerce-agents.git",
+  "branch": "main",
+  "branches": ["main"],
+  "reviewed_through": "fd4d59224ab96b43c6dc6888207c67b3bd5a24cf",
+  "reviewed_date": "2026-09-05",
+  "notes": "Fork overlay established at this commit (\"building commerce agents using claude\"); this is upstream main's only commit and the only branch upstream carries as of this baseline (checked via `gh api repos/anthropics/commerce-agents/branches`). No upstream commits adopted beyond the fork point. anthropics/commerce-agents has GitHub Issues disabled (`gh issue list` reports \"the 'anthropics/commerce-agents' repository has disabled issues\"), so the issue axis in tools/check_upstream_updates.py always reports DISABLED/not-checked for this upstream, never \"no new items\" -- reviewed_issue_through is kept at 0 and is not meaningful here. Four open pull requests existed upstream at baseline time (#1-#4); consistent with this template's convention (see docs/DECISIONS.md), the baseline captures the state as found and does not retroactively require triaging pre-existing backlog, only PRs opened after this point. Subsequent upstream commits and pull requests require review before the corresponding watermarks advance.",
+  "reviewed_pr_through": 4,
+  "reviewed_issue_through": 0
+}

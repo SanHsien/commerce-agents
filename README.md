@@ -1,193 +1,100 @@
+[English](README.en.md) | 中文版
+
 # Claude Commerce Agents
 
-Two commerce agents built on Claude: a **shopping agent** a business embeds in its app for
-customers, and a **merchant agent** its staff use to run the back office. Each is defined
-once (prompt, skills, tool contracts, gates) and runs on the Messages API, the Claude Agent
-SDK, and Managed Agents; four runnable verticals show both over the same libraries.
+> **這是 [`anthropics/commerce-agents`](https://github.com/anthropics/commerce-agents) 的 Windows-first 維護型 fork**，沿用 Apache License 2.0 與完整 Git 歷史。產品行為跟隨上游；本維護線補上繁中文件、Windows 開發／驗收 gate，以及逐筆審查的上游追蹤。差異見 [`FORK.md`](FORK.md)，維護決策見 [`docs/DECISIONS.md`](docs/DECISIONS.md)。
+
+Claude 上的兩個商務 agent 參考實作：一個**購物 agent**（給商家嵌進自己的 App，服務顧客），
+一個**商家 agent**（給商家後台員工用）。每個 agent 的 prompt、skills、工具合約與安全閘門都只
+定義一次，同時跑在 Messages API、Claude Agent SDK 與 Managed Agents 三條路徑上；四個可執行的
+垂直領域範例（零售、旅遊、電信、娛樂）展示同一套函式庫在不同業態下的樣子。
 
 > [!NOTE]
-> Every company, brand, product, and person here is fictional; the only company is ACME.
-> Nothing places an order, charges a card, or changes a live listing: `checkout` renders
-> the cart for the host to complete, and every merchant write is staged until a person
-> approves it. Business rules, authorization, and compliance are the deployment's.
+> 所有公司、品牌、產品與人物均為虛構，唯一的公司是 ACME。這個 repo 不會真的下單、不會真的
+> 刷卡、不會真的改動上線中的商品：`checkout` 只把購物車渲染出來交給宿主完成，商家端的每一筆
+> 寫入都要等人核准後才生效。商業規則、授權與合規是實際部署時要自己補上的。
 
-## Quick start: run the demos
+## 快速開始：跑範例 demo
 
-Python 3.11+ and Node 22. Clone, install, add a key, run a vertical:
+需要 Python 3.11+ 與 Node 22。
 
 ```bash
-git clone https://github.com/anthropics/commerce-agents.git && cd commerce-agents
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt       # the seven packages and their pinned dependencies
-cp .env.example .env                  # add ANTHROPIC_API_KEY
-(cd examples && npm ci)               # the eight web apps share one workspace
-python scripts/run_demo.py retail     # API :8000 + storefront :3000
+git clone https://github.com/SanHsien/commerce-agents.git && cd commerce-agents
+python -m venv .venv && .venv\Scripts\activate       # Windows PowerShell；macOS/Linux 用 source .venv/bin/activate
+pip install -r requirements.txt        # 七個套件與其釘選版本的依賴
+copy .env.example .env                 # 填入 ANTHROPIC_API_KEY
+cd examples && npm ci && cd ..         # 八個 Web App 共用一個 npm workspace
+python scripts/run_demo.py retail      # API :8000 + 購物前台 :3000
 ```
 
-`--merchant` starts the portal instead of the storefront and `--all` starts both. The
-verticals are `retail` (:3000, portal :3100), `travel` (:3001, :3101), `telecom` (:3002,
-:3102), and `entertainment` (:3003, :3103); each README lists prompts to try on both surfaces.
+`--merchant` 改成只啟動商家後台，`--all` 兩者都啟動。四個垂直範例：`retail`（前台 :3000／
+後台 :3100）、`travel`（:3001／:3101）、`telecom`（:3002／:3102）、`entertainment`（:3003／
+:3103）；各自的 README 附上可以在前台與後台試的對話開場。
 
-## Quick start: build your own
+## 快速開始：用 Claude Code plugin 蓋自己的 agent
 
-The Claude Code plugin scaffolds an agent on these packages against your systems, or reviews
-one you have. With the repo cloned as above (the plugin reads it as the reference):
+`commerce-builder` plugin 會照這個 repo 的函式庫，針對你自己的系統生成一個 agent（或審查一個
+既有的）：
 
 ```bash
-claude plugin marketplace add anthropics/commerce-agents
+claude plugin marketplace add SanHsien/commerce-agents
 claude plugin install commerce-builder@claude-commerce-agents
 claude
-/scaffold-commerce-agent a shopping assistant for our store
+/scaffold-commerce-agent 幫我的商店建一個購物助理
 ```
 
-The command asks about your stack, plays the plan back, and builds the project; `/add-commerce-flow`
-and `/author-commerce-evals` continue from there, and `/review-commerce-agent` starts from an agent
-that already exists ([`plugins/commerce-builder/`](plugins/commerce-builder/)). Each command also
-runs when a request matches its description, so naming it is optional.
+其餘指令 `/add-commerce-flow`、`/author-commerce-evals`、`/review-commerce-agent` 見
+[`plugins/commerce-builder/`](plugins/commerce-builder/)。
 
-## The two agents
+## 兩個 agent 是什麼
 
-The **shopping agent** searches, compares, plans, fills the cart, answers order and policy
-questions, and remembers what a customer tells it. Its five flows are the skills in
-[`shopping-agent/skills/`](shopping-agent/skills/); a deployment implements
-[`StorefrontBackend`](shopping-agent/core/shopping_agent/backend.py) over its catalog,
-cart, order, and policy systems.
+**購物 agent** 負責搜尋、比較、規劃、填購物車、回答訂單與政策問題，並記住顧客告訴它的事。
+五個流程是 [`shopping-agent/skills/`](shopping-agent/skills/) 底下的 skills；部署方要在
+[`StorefrontBackend`](shopping-agent/core/shopping_agent/backend.py) 上接上自己的商品、
+購物車、訂單與政策系統。
 
-The **merchant agent** explains performance, maintains listings, acts on inventory and order
-alerts, prices and promotes, and drafts campaigns; every write is a staged change the host's
-approval surface applies. Its five flows are the skills in [`merchant-agent/skills/`](merchant-agent/skills/);
-a deployment implements [`MerchantBackend`](merchant-agent/core/merchant_agent/backend.py) over
-its analytics, catalog, inventory, pricing, and campaign systems.
+**商家 agent** 負責解釋績效、維護商品頁、處理庫存與訂單警示、調價與促銷、草擬行銷活動；每一
+筆寫入都是一筆待核准的變更，由宿主的核准介面套用。五個流程是
+[`merchant-agent/skills/`](merchant-agent/skills/) 底下的 skills；部署方要在
+[`MerchantBackend`](merchant-agent/core/merchant_agent/backend.py) 上接上自己的分析、商品、
+庫存、定價與行銷系統。
 
-## Layout
+## 目錄結構
 
-| Directory | Contents | pip package, `import` name |
-|---|---|---|
-| [`commerce-common/`](commerce-common/) | What both roles share: config, fencing, memory, skills, grounding, presentation, executor frame, events | `commerce-common`, `commerce_common` |
-| [`shopping-agent/core/`](shopping-agent/core/) | Shopping types, `StorefrontBackend`, prompt, tool contracts, gates, executor | `shopping-agent-core`, `shopping_agent` |
-| [`shopping-agent/runtime-messages-api/`](shopping-agent/runtime-messages-api/) | `ShoppingAgent`, the turn loop on the Messages API | `shopping-agent-runtime`, `shopping_agent_runtime` |
-| [`shopping-agent/runtime-agent-sdk/`](shopping-agent/runtime-agent-sdk/) | The shopping agent on the Agent SDK, with a console | `shopping-agent-sdk`, `shopping_agent_sdk` |
-| [`shopping-agent/managed-agents/`](shopping-agent/managed-agents/) | Manifest and storefront MCP server for Managed Agents | — |
-| [`merchant-agent/core/`](merchant-agent/core/) | Merchant types, `MerchantBackend`, prompt, tool contracts, change guardrails, gates, executor | `merchant-agent-core`, `merchant_agent` |
-| [`merchant-agent/runtime-messages-api/`](merchant-agent/runtime-messages-api/) | `MerchantAgent` and the analysis delegate on the Messages API | `merchant-agent-runtime`, `merchant_agent_runtime` |
-| [`merchant-agent/runtime-agent-sdk/`](merchant-agent/runtime-agent-sdk/) | The merchant agent on the Agent SDK, with an approving console | `merchant-agent-sdk`, `merchant_agent_sdk` |
-| [`merchant-agent/managed-agents/`](merchant-agent/managed-agents/) | Manifest, merchant MCP server, scheduled digest for Managed Agents | — |
-| [`examples/`](examples/) | Four verticals, shared host code (`demo_common/`), shared web code (`web-shared/`) | — |
-| [`plugins/commerce-builder/`](plugins/commerce-builder/) | The Claude Code plugin | — |
-| [`docs/`](docs/) | `safety.md` (enforced rules), `backends.md` (mapping your systems), `deployment.md` (other platforms) | — |
-| [`tests/`](tests/) | Cross-package suites; each package also has its own `tests/` | — |
-| [`scripts/`](scripts/) | `install.sh`, `run_demo.py`, `smoke_chat.py`, `screenshot_tour.py`, `check.py`, `deploy_managed_agent.sh`, `verify_all.py` | — |
+| 目錄 | 內容 |
+|---|---|
+| [`commerce-common/`](commerce-common/) | 兩個角色共用的東西：設定、fencing、記憶、skills、grounding、呈現層、executor 框架、事件 |
+| [`shopping-agent/core/`](shopping-agent/core/) | 購物型別、`StorefrontBackend`、prompt、工具合約、閘門、executor |
+| [`shopping-agent/runtime-messages-api/`](shopping-agent/runtime-messages-api/) | `ShoppingAgent`，跑在 Messages API 上的對話迴圈 |
+| [`shopping-agent/runtime-agent-sdk/`](shopping-agent/runtime-agent-sdk/) | 跑在 Claude Agent SDK 上的購物 agent，附一個 console |
+| [`shopping-agent/managed-agents/`](shopping-agent/managed-agents/) | Managed Agents 用的 manifest 與購物前台 MCP server |
+| [`merchant-agent/core/`](merchant-agent/core/) | 商家型別、`MerchantBackend`、prompt、工具合約、變更護欄、閘門、executor |
+| [`merchant-agent/runtime-messages-api/`](merchant-agent/runtime-messages-api/) | `MerchantAgent` 與跑在 Messages API 上的分析代理 |
+| [`merchant-agent/runtime-agent-sdk/`](merchant-agent/runtime-agent-sdk/) | 跑在 Claude Agent SDK 上的商家 agent，附一個會核准變更的 console |
+| [`merchant-agent/managed-agents/`](merchant-agent/managed-agents/) | Managed Agents 用的 manifest、商家 MCP server、排程摘要 |
+| [`examples/`](examples/) | 四個垂直範例，共用 host 程式碼（`demo_common/`）與共用 Web 程式碼（`web-shared/`） |
+| [`plugins/commerce-builder/`](plugins/commerce-builder/) | Claude Code plugin |
+| [`docs/`](docs/) | `safety.md`（安全規則清單）、`backends.md`（怎麼接自己的系統）、`deployment.md`（其他平台） |
+| [`tests/`](tests/) | 跨套件的測試；每個套件也有自己的 `tests/` |
+| [`scripts/`](scripts/) | `install.sh`、`run_demo.py`、`smoke_chat.py`、`screenshot_tour.py`、`check.py`、`deploy_managed_agent.sh`、`verify_all.py` |
 
-## Three ways to run an agent
+完整介面細節（三種跑法、安全機制、四個垂直範例、部署到其他平台）見英文原版
+[`README.en.md`](README.en.md)；那份文件是上游持有的鏡像，本 fork 不覆寫它，維護範圍見
+[`FORK.md`](FORK.md)。
 
-**Messages API.** The reference loop; the examples are host applications around it:
+## 驗證
 
-```python
-from pathlib import Path
-
-from shopping_agent import ShoppingAgentConfig
-from shopping_agent_runtime import ShoppingAgent
-
-agent = ShoppingAgent(backend=your_backend, skills_dir=Path("shopping-agent/skills"),
-                      config=ShoppingAgentConfig(brand_name="Your Store"))
-async for event in agent.stream_turn(messages, session, state):
-    ...   # text_delta, tool_call, ui, cart_update (change_update on the merchant side), turn_complete
-await agent.update_memory(messages, session)   # memory extraction; this path only
+```powershell
+.venv\Scripts\python.exe -m ruff check .
+.venv\Scripts\python.exe -m ruff format --check .
+.venv\Scripts\python.exe -m pytest -q
+.venv\Scripts\python.exe scripts\check.py
 ```
 
-The example hosts take the session id in an `X-Session-Id` header.
+`requirements-dev.txt` 額外裝 pytest、ruff與本 fork 的維護工具依賴（均為 stdlib，無新增
+runtime 依賴）。本 fork 的 Windows 一鍵 gate 是 [`tools/dev_check.ps1`](tools/dev_check.ps1)。
 
-**Agent SDK.** The same prompt, skills, and tools, with the SDK running the loop; the host
-prefetches grounding reads, and nothing runs after the turn:
+## 授權
 
-```bash
-python shopping-agent/runtime-agent-sdk/main.py --once "a two-person tent under $250"
-python merchant-agent/runtime-agent-sdk/main.py          # approves staged changes with y/N
-```
-
-**Managed Agents.** A hosted agent over the same skills and contracts, calling your MCP server:
-
-```bash
-scripts/deploy_managed_agent.sh shopping-agent/managed-agents/shopping-agent   # or merchant-agent/...; --live deploys
-```
-
-## Safety
-
-Fencing, provenance gates, caps, memory validation, and the merchant approval gate run
-inside the tool call and hold on all three paths; grounding, the analysis budgets, and memory
-extraction are runtime features. [`docs/safety.md`](docs/safety.md) lists each rule with its
-module and paths, and what a deployment adds first; the examples have no authentication and
-the MCP servers bind to loopback.
-
-## Verticals
-
-| Example | Storefront | Portal |
-|---|---|---|
-| [`examples/retail/`](examples/retail/) ACME | Search, comparison, plans, cart, checkout, memory over the built-in components | Digest, staged restocks and listing fixes, analysis delegate over a SQL view |
-| [`examples/travel/`](examples/travel/) ACME Travel | Date-bound inventory and a `present_itinerary` extension | Occupancy calendar and date-window rate moves |
-| [`examples/telecom/`](examples/telecom/) ACME Mobile | Account context, plan matrix, server-authored fee disclosures | Plan mix, price moves that state the lines affected, protected regulated fees |
-| [`examples/entertainment/`](examples/entertainment/) ACME Tickets | Timed holds, waitlists, transfers, venue map, all-in fee disclosures | Event pacing, hold releases that add real capacity, fee-preserving price moves |
-
-Each example's README has a `Try` section: the turns `scripts/smoke_chat.py` runs, and single
-prompts with what a good answer does.
-
-## Verify
-
-```bash
-ruff check . && ruff format --check . && pytest && python scripts/check.py
-python scripts/verify_all.py                        # the line above plus deploy dry runs and web builds
-python scripts/smoke_chat.py --vertical travel      # one live conversation; needs a key
-```
-
-`requirements-dev.txt` adds pytest and ruff. CI installs from it on two Python versions,
-builds the eight web apps, and checks that the package names stay unregistered on the
-public index (the pin files install them from their directories, never from the index). To confirm caching, read
-`cache_read_input_tokens` from `turn_complete`, or the line each model call logs on its
-runtime's logger: zero on a second turn means the prefix changed.
-
-## Deploying elsewhere
-
-The runtimes take any `anthropic` client as `client=` and the SDK runtimes take the platform
-from the CLI environment; [`docs/deployment.md`](docs/deployment.md) covers GCP Vertex AI, AWS Bedrock, Microsoft Foundry, and gateways.
-
-## MCP connectors
-
-None ship; both agents reach your systems through the backend interfaces. Where an official
-connector is the source of record, it is the integration target: analytics warehouses (Snowflake,
-BigQuery, Databricks, Amplitude), finance (Stripe, Square, PayPal, QuickBooks), delivery (Slack, Google Drive, Gmail).
-A commerce platform's own MCP server for catalog, cart, or checkout is called from a backend
-method server-side; on Managed Agents the manifest mounts it beside the role's server, and the
-provenance gates stay in front of every write.
-
-## Making it yours
-
-- **Backend methods.** Each one calls your service server-side with the
-  credential your host holds for the session; the model reads only the result. A flow whose
-  steps have a fixed order enforces that order in the backend.
-- **Read the backend guide.** [`docs/backends.md`](docs/backends.md) walks through
-  identity and credentials, ordered flows, checkout, products with options, and figures
-  your platform cannot supply.
-- **The same interface covers other business shapes.** On a marketplace, seller is a search
-  dimension and the merchant agent acts for the operator the session names. With account or
-  contract pricing, the price quoted is the session account's. With no checkout of your
-  own, turn the cart off or hand it to a quote, a purchase order, or a hosted checkout URL.
-- **Checkout hands off.** The checkout card links to your own checkout route, or to the
-  platform's hosted checkout URL (one per seller on a marketplace). The backend returns the
-  URL and the host renders it; the model never sees it.
-- **Start small.** A shopping pilot implements search and product details and stubs the
-  rest; a stubbed method returns an unavailable result and changes no prompt bytes. A
-  merchant pilot implements the eight read methods and has the writes refuse; digests and
-  metrics then run with no write path.
-- **Switch off what you do not have.** A system the business lacks entirely (no cart on a
-  referral surface, no order tracking) is an `enable_*` switch turned off, which removes its
-  tools, prompt lines, and grounding rule on every path; park the flows that need it under
-  `skills/_staged/`. The merchant config has the same switches for listing edits, inventory,
-  pricing, and campaigns.
-- **Add your own.** A flow is a directory with a `SKILL.md` under either `skills/`. Domain
-  UI is a `PresentationExtension` (the verticals ship seven). `brand_name`,
-  `assistant_name`, and `brand_voice` on either config set the identity.
-
-## License
-
-Copyright 2026 Anthropic PBC. Licensed under the [Apache License 2.0](./LICENSE).
-This is a reference implementation; it is not maintained and does not accept contributions.
+原始著作權 2026 Anthropic PBC，以 [Apache License 2.0](./LICENSE) 授權；這是一份參考實作，
+不由 Anthropic 維護、也不接受回貢。本 fork 的授權與來源說明見 [`NOTICE.md`](NOTICE.md)。

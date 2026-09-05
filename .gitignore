@@ -40,3 +40,8 @@ merchant-agent/managed-agents/merchant-mcp-server/.merchant_memory.json
 .vscode/
 .claude/
 pyrightconfig.json
+
+# --- fork ---
+# Generated maintenance reports (SanHsien fork tooling); regenerate, do not commit.
+upstream-review-report.md
+dependency-freshness-report.md

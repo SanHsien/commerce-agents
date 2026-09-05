@@ -1,0 +1,25 @@
+{
+  "_comment": "Reviewed-but-not-now decisions for tools/check_dependency_freshness.py. Each entry needs deferredLatest so it expires by itself once upstream moves past the release it was reviewed against. A permanent policy belongs on the declaring line as `# freshness-hold:` instead.",
+  "deferrals": {
+    "ruff": {
+      "deferredLatest": "0.16.6",
+      "reason": "requirements-dev.txt 是上游持有的釘選檔（本 fork 不改），本行的 ruff==0.16.3 因此不能直接跟著改。CI 與本機 ruff.toml 設定都相容 0.16.x；等上游自己升版，或這條維護線決定另外走一支獨立的 dev-only requirements 檔再處理。",
+      "reviewedOn": "2026-09-05"
+    },
+    "actions/checkout": {
+      "deferredLatest": "7.0.1",
+      "reason": "只有上游自有的 .github/workflows/ci.yml 還釘浮動的 @v4；該檔屬上游產品內容，重新釘選是上游的決定，本 fork 不改。本線自有的 codeql.yml／dependency-freshness.yml／upstream-check.yml 已釘 v7.0.1 的 SHA。",
+      "reviewedOn": "2026-09-05"
+    },
+    "actions/setup-python": {
+      "deferredLatest": "7.0.0",
+      "reason": "同上：@v5 只出現在上游自有的 ci.yml。本線自有的 dependency-freshness.yml／upstream-check.yml 已釘 v7.0.0 的 SHA。",
+      "reviewedOn": "2026-09-05"
+    },
+    "actions/setup-node": {
+      "deferredLatest": "7.0.0",
+      "reason": "同上：@v4 只出現在上游自有的 ci.yml。本 fork 目前沒有自己的 workflow 用到 setup-node，純粹是上游版本落後，不是本線的釘選。",
+      "reviewedOn": "2026-09-05"
+    }
+  }
+}
