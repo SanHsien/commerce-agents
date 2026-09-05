@@ -15,7 +15,9 @@
 
 - 建立 fork 開發鷹架：繁中 `README.md`（英文原檔保留為 `README.en.md`）、`AGENTS.md`、
   `NOTICE.md`、`FORK.md`、`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`。
-- Windows 開發環境：`.venv` + `requirements-dev.txt`、`tools/dev_check.ps1` 一鍵 gate。
+- Windows 開發環境：`.venv` + `requirements-dev-windows.txt`（＝上游 `requirements-dev.txt`
+  再加 `tzdata`，補上 Windows 版 CPython 缺少的 IANA 時區資料庫）、`tools/dev_check.ps1`
+  一鍵 gate（含時區資料庫前檢，並 deselect 一個 Windows 沒有 POSIX 權限語意而恆紅的上游測試）。
 - 維護工具：`tools/check_dependency_freshness.py`（`requirements-dev.txt` 對 PyPI、
   `.github/workflows/*.yml` 釘選的 Action 對 GitHub Releases）、
   `tools/check_upstream_updates.py`（上游 commit／PR／issue 三軸未審查追蹤）、

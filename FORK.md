@@ -34,7 +34,8 @@
 | `tools/check_dependency_freshness.py` | 新增：見上 |
 | `tools/check_upstream_updates.py` | 新增：讀寫 `tools/upstream_baseline.json` 的四面向水位（commit／PR／issue／已知分支清單） |
 | `tools/check_links.py` | 新增：維護文件之間的相對連結檢查 |
-| `tools/dev_check.ps1` | 新增：Windows 本機一鍵 gate（ruff → ruff format → pytest → `scripts/check.py`） |
+| `requirements-dev-windows.txt` | 新增：`-r requirements-dev.txt` 再加 `tzdata`。Windows 版 CPython 沒有系統 IANA 時區資料庫，少了它有 4 個上游時鐘測試在本機紅。獨立成檔而不是改上游的 `requirements-dev.txt`，讓上游那份保持零 diff |
+| `tools/dev_check.ps1` | 新增：Windows 本機一鍵 gate（時區資料庫前檢 → ruff → ruff format → pytest → `scripts/check.py` → `check_links.py`），並 deselect 一個 Windows 沒有 POSIX 權限語意而恆紅的上游測試 |
 | `tools/upstream_baseline.json` | 新增：見 [`docs/DECISIONS.md`](docs/DECISIONS.md) |
 | `tests/test_fork_*.py` | 新增：上面三支工具的合約測試（`fork_` 前綴避免撞上游 `tests/` 檔名） |
 | `docs/DECISIONS.md` | 新增：本 fork 的維護決策記錄 |
@@ -43,8 +44,9 @@
 
 產品 `commerce-common/`、`shopping-agent/`、`merchant-agent/`、`examples/`、`plugins/`、
 `.claude-plugin/`、`docs/{safety,backends,deployment}.md`、`scripts/`、`conftest.py`、
-`requirements*.txt`、`pytest.ini`、`.env.example`、`.github/workflows/ci.yml`、`LICENSE`
-以上游為準，除非有已記錄的 fork 修正——目前沒有。
+`requirements.txt`、`requirements-dev.txt`、`pytest.ini`、`.env.example`、
+`.github/workflows/ci.yml`、`LICENSE` 以上游為準，除非有已記錄的 fork 修正——目前沒有。
+Windows 需要的額外依賴走本 fork 自己的 `requirements-dev-windows.txt`，不改上游那兩份。
 
 ## 分支與 remote
 

@@ -1,5 +1,36 @@
 # 維護決策
 
+## 2026-09-05：Windows 的測試落差用「加一支 fork 自有的 requirements」與「deselect」處理，不改上游檔
+
+**背景**：在 Windows 11 上跑 `pytest -q`，1145 筆裡有 5 筆紅，全部落在上游測試檔：
+
+- 4 筆（`tests/test_turn_loop.py` 三筆、`merchant-agent/runtime-messages-api/tests/test_scheduled_digest.py`
+  一筆）是 `ValidationError: unknown IANA timezone: 'Europe/Lisbon'`。Windows 版 CPython
+  不隨附系統 IANA 時區資料庫，`zoneinfo.ZoneInfo` 因此對每個具名時區都失敗；上游 CI 跑
+  Ubuntu，系統有 `/usr/share/zoneinfo`，所以上游從來看不到這件事。
+- 1 筆（`commerce-common/tests/test_memory_stores.py::test_the_file_store_is_owner_only_and_keeps_purge_generations_across_instances`）
+  斷言 `stat.S_IMODE(...) == 0o600`，實得 `0o666`。Windows 沒有 POSIX 的 owner/group/other
+  權限位，這是平台語意差異，不是程式錯誤。
+
+**決定**：
+
+1. 時區那 4 筆：新增 fork 自有的 `requirements-dev-windows.txt`（`-r requirements-dev.txt`
+   ＋ `tzdata==2026.3`）。實測裝上後 4 筆全綠（1144 passed / 1 failed）。
+2. 權限那 1 筆：由 `tools/dev_check.ps1` 用 `--deselect` 排除，並在 `AGENTS.md`、`README.md`
+   寫明它是平台限制而非回歸，以上游 Ubuntu CI 的結果為準。
+
+**理由**：兩個做法的共同點是**上游檔案零 diff**。改 `requirements-dev.txt` 加一行
+`tzdata`、或在上游測試檔加 `@pytest.mark.skipif(sys.platform == "win32")`，都會在每次
+上游同步時變成衝突點，而且是那種「衝突內容看起來無害、於是被隨手解掉」的高風險型。
+`tzdata` 是測試環境依賴（由標準函式庫載入，repo 裡沒有任何套件 import 它），本來就不該
+進 `requirements.txt`。deselect 寫在 fork 自有的 gate 腳本裡，上游怎麼改那支測試都不影響。
+
+**代價與防呆**：多一支 pin 檔就多一個會靜默老化的宣告，所以
+`tools/check_dependency_freshness.py` 的 `REQUIREMENT_FILES` 同步收錄它，
+`tests/test_fork_dependency_freshness.py::test_every_fork_owned_requirements_file_is_checked`
+把「檔案存在 × 有被檢查 × `tzdata` 確實來自這支檔」釘成契約——把該檔從
+`REQUIREMENT_FILES` 拿掉，這筆測試就紅。
+
 ## 2026-09-05：建立 Windows-first 維護型 fork
 
 **決定**：fork `anthropics/commerce-agents`，保留 Apache License 2.0 與完整 Git 歷史，預設分支

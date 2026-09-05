@@ -1,8 +1,9 @@
 """Compare declared dependency floors against their current upstream releases.
 
-This fork's *own* declared dependencies are the two dev tools in `requirements-dev.txt`
+This fork's *own* declared dependencies are the dev tools in `requirements-dev.txt`
 (pytest, ruff; everything else that file pulls in comes from `-r requirements.txt`, which
-upstream owns and pins exactly, not with a floor -- see the exclusion note below) and the
+upstream owns and pins exactly, not with a floor -- see the exclusion note below), the
+`tzdata` pin this maintenance line adds in `requirements-dev-windows.txt`, and the
 pinned GitHub Actions used by `.github/workflows/*.yml`. Dependabot proposes upgrades one
 pull request at a time, which answers "is there a newer release?" but never "how far
 behind is what we declare, across every declaration in the repo?". This reads both
@@ -38,10 +39,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 USER_AGENT = "commerce-agents-dependency-freshness"
 
-# This fork declares its own dev dependencies in one place. The list stays a tuple so a
-# second requirements file can be added without touching anything else. requirements.txt
-# is not in this list: see the module docstring for why exact upstream pins are excluded.
-REQUIREMENT_FILES = ("requirements-dev.txt",)
+# The declaration files this fork checks. `requirements-dev.txt` is upstream's;
+# `requirements-dev-windows.txt` is this maintenance line's own Windows-only addition, and
+# its pin drifts silently unless it is read here too. requirements.txt is not in this
+# list: see the module docstring for why exact upstream pins are excluded.
+REQUIREMENT_FILES = ("requirements-dev.txt", "requirements-dev-windows.txt")
 
 _REQUIREMENT_RE = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(.*)$")
 _MINIMUM_RE = re.compile(r"(>=|>|==|~=)\s*([0-9][0-9A-Za-z.!+_-]*)")

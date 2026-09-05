@@ -1,0 +1,14 @@
+# Fork-owned. Windows-only additions on top of the upstream dev pins.
+#
+# CPython on Windows has no system IANA time zone database, so `zoneinfo.ZoneInfo`
+# raises for every named zone and the suite's clock tests fail there while passing on
+# the Ubuntu runners upstream CI uses. `tzdata` is the PyPI mirror of that database;
+# it is a test-environment dependency only, imported by the standard library rather
+# than by any package in this repo, so it stays out of `requirements.txt`.
+#
+# Kept separate from `requirements-dev.txt` because that file is upstream-held: this
+# maintenance line adds nothing to it. Install on Windows with
+# `pip install -r requirements-dev-windows.txt`.
+
+-r requirements-dev.txt
+tzdata==2026.3

@@ -17,8 +17,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Established the fork development scaffold: a Traditional Chinese `README.md` (the
   original English file kept as `README.en.md`), `AGENTS.md`, `NOTICE.md`, `FORK.md`,
   `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`.
-- Windows development environment: `.venv` + `requirements-dev.txt`,
-  `tools/dev_check.ps1` as the one-command local gate.
+- Windows development environment: `.venv` + `requirements-dev-windows.txt` (upstream's
+  `requirements-dev.txt` plus `tzdata`, the IANA time zone database Windows CPython does
+  not ship), `tools/dev_check.ps1` as the one-command local gate (it preflights the time
+  zone database and deselects one upstream test that asserts POSIX file permissions
+  Windows has no equivalent for).
 - Maintenance tooling: `tools/check_dependency_freshness.py` (checks
   `requirements-dev.txt` against PyPI and pinned Actions in `.github/workflows/*.yml`
   against the GitHub Releases API), `tools/check_upstream_updates.py` (tracks unreviewed

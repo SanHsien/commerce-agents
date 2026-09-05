@@ -50,6 +50,24 @@ def test_hold_marker_is_read_off_the_declaring_line() -> None:
     assert holds["pytest"].startswith("pinned for a documented reason")
 
 
+def test_every_fork_owned_requirements_file_is_checked() -> None:
+    """The Windows-only pin is a declaration this fork owns, so it must be read here.
+
+    Adding `requirements-dev-windows.txt` to the repo without adding it to
+    REQUIREMENT_FILES would leave its `tzdata` pin ageing with nothing watching it.
+    """
+    assert set(checker.REQUIREMENT_FILES) == {
+        "requirements-dev.txt",
+        "requirements-dev-windows.txt",
+    }
+    for name in checker.REQUIREMENT_FILES:
+        assert (checker.REPO_ROOT / name).is_file(), f"{name} is checked but missing"
+
+    packages = checker.load_direct_dependencies()
+    sources = {package["name"]: package["source"] for package in packages}
+    assert sources.get("tzdata") == "requirements-dev-windows.txt"
+
+
 def test_a_requirements_include_line_is_not_expanded() -> None:
     """`-r requirements.txt` must not pull upstream's exact pins into this check."""
     packages = checker.parse_requirements(

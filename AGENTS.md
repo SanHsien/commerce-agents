@@ -57,6 +57,16 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
   可讀版本。
 - **不開分支、不開 PR**：日常修改驗證通過後直接推 `origin/main`；`upstream/main` 只 fetch、
   不推送、不 force-push、不刪除。
+- **Windows 開發環境**：`python -m venv .venv` 後裝
+  [`requirements-dev-windows.txt`](requirements-dev-windows.txt)（＝`requirements-dev.txt`
+  再加 `tzdata`），**不要**只裝 `requirements-dev.txt`。Windows 版 CPython 沒有系統 IANA
+  時區資料庫，少了 `tzdata` 會有 4 個上游時鐘測試在本機紅、在上游 Ubuntu CI 綠。
+- **已知的 Windows 平台限制（不是回歸）**：
+  `commerce-common/tests/test_memory_stores.py::test_the_file_store_is_owner_only_and_keeps_purge_generations_across_instances`
+  斷言檔案權限是 POSIX 的 `0o600`，Windows 沒有這個語意，本機恆紅（`0o666`）。上游 CI 在
+  Ubuntu 上是綠的。**不要為了讓它綠而改上游測試檔**（會變成每次同步的衝突點）；本機驗收用
+  `pytest -q --deselect commerce-common/tests/test_memory_stores.py::test_the_file_store_is_owner_only_and_keeps_purge_generations_across_instances`
+  ，並以上游 `ci.yml` 的 Ubuntu 結果為準。
 - **Windows 本機與 CI 的 canonical gate** 是 [`tools/dev_check.ps1`](tools/dev_check.ps1)：
   `ruff check` → `ruff format --check` → `pytest` → `python scripts/check.py`；上游既有的
   `.github/workflows/ci.yml`（Ubuntu，兩個 Python 版本 + web build + no-pypi-fallback）維持

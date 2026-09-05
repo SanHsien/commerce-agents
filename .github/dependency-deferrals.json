@@ -3,7 +3,7 @@
   "deferrals": {
     "ruff": {
       "deferredLatest": "0.16.6",
-      "reason": "requirements-dev.txt 是上游持有的釘選檔（本 fork 不改），本行的 ruff==0.16.3 因此不能直接跟著改。CI 與本機 ruff.toml 設定都相容 0.16.x；等上游自己升版，或這條維護線決定另外走一支獨立的 dev-only requirements 檔再處理。",
+      "reason": "requirements-dev.txt 是上游持有的釘選檔（本 fork 不改），本行的 ruff==0.16.3 因此不能直接跟著改。CI 與本機 ruff.toml 設定都相容 0.16.x，等上游自己升版再跟。requirements-dev-windows.txt 雖然是本 fork 自有的宣告檔，但它的範圍僅限「Windows 缺少的平台能力」（tzdata），不拿來覆蓋上游的工具版本——那會讓本機 lint 結果與上游 CI 分岐，是比落後三個 patch 版更糟的問題。",
       "reviewedOn": "2026-09-05"
     },
     "actions/checkout": {

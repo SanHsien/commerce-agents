@@ -85,14 +85,28 @@ claude
 ## 驗證
 
 ```powershell
+.venv\Scripts\python.exe -m pip install -r requirements-dev-windows.txt
+.venv\Scripts\pwsh.exe -NoProfile -File tools\dev_check.ps1   # 或用系統 pwsh
+```
+
+`tools/dev_check.ps1` 依序跑 `ruff check` → `ruff format --check` → `pytest` →
+`scripts/check.py` → `tools/check_links.py`，是本 fork 在 Windows 上的一鍵 gate。要逐項手跑：
+
+```powershell
 .venv\Scripts\python.exe -m ruff check .
 .venv\Scripts\python.exe -m ruff format --check .
 .venv\Scripts\python.exe -m pytest -q
 .venv\Scripts\python.exe scripts\check.py
 ```
 
-`requirements-dev.txt` 額外裝 pytest、ruff與本 fork 的維護工具依賴（均為 stdlib，無新增
-runtime 依賴）。本 fork 的 Windows 一鍵 gate 是 [`tools/dev_check.ps1`](tools/dev_check.ps1)。
+`requirements-dev.txt`（上游持有）裝的是 pytest、pytest-asyncio 與 ruff；
+[`requirements-dev-windows.txt`](requirements-dev-windows.txt) 是本 fork 加的，多一個
+`tzdata`——Windows 版 CPython 沒有系統 IANA 時區資料庫，少了它會有 4 個上游時鐘測試在本機紅、
+在上游 Ubuntu CI 綠。本 fork 的維護工具只用標準函式庫，沒有新增任何 runtime 依賴。
+
+還有一個上游測試在 Windows 上恆紅：`test_memory_stores.py` 裡驗證檔案權限是 POSIX `0o600`
+的那筆，Windows 沒有這個語意。這是平台限制不是回歸，`dev_check.ps1` 會把它 deselect 掉，理由
+與判準見 [`AGENTS.md`](AGENTS.md) 與 [`docs/DECISIONS.md`](docs/DECISIONS.md)。
 
 ## 授權
 
