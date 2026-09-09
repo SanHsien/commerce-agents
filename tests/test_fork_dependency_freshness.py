@@ -17,6 +17,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 import check_dependency_freshness as checker  # noqa: E402
@@ -190,12 +192,131 @@ def test_the_repos_own_deferrals_file_parses() -> None:
     assert checker.load_deferrals() == {}
 
 
-def test_report_names_both_exits_so_the_next_person_does_not_invent_a_third() -> None:
+def test_an_action_published_from_a_subdirectory_is_parsed_and_resolved() -> None:
+    """`github/codeql-action/init` is a real declaration; an owner/repo-only pattern
+    matched nothing on those lines, so codeql.yml's two pins were invisible to the
+    report -- silently, which is the worst way for a check to be wrong."""
+    text = (
+        "      - uses: github/codeql-action/init"
+        "@a35ac6e6798d72df5475948b28efb89edc2e19ca # v4.37.9\n"
+    )
+    parsed = checker.parse_workflow_actions(text, "codeql.yml")
+
+    assert [p["name"] for p in parsed] == ["github/codeql-action/init"]
+    assert parsed[0]["minimum"] == "4.37.9"
+    # Releases live on the publishing repository, not the sub-path.
+    assert checker.action_repository("github/codeql-action/init") == "github/codeql-action"
+    assert checker.action_repository("actions/checkout") == "actions/checkout"
+
+
+def test_a_latest_that_cannot_be_compared_is_a_failed_check_not_an_ok_row() -> None:
+    """The false green this whole fix exists to remove.
+
+    `github/codeql-action` tags its latest *release* `codeql-bundle-v2.27.0`. Compared
+    against a `v4.37.9` pin that parses to nothing, scores as "not newer", and reports
+    OK -- forever, no matter how far behind the pin drifts. A check that cannot fail is
+    not a check, so an unresolvable latest has to land in `check_failed`.
+    """
+    rows = checker.collect_status(
+        [{"name": "github/codeql-action/init", "minimum": "4.37.9", "hold": ""}],
+        lambda _name: None,
+        deferrals={},
+    )
+
+    assert rows[0]["latest"] == "unknown"
+    assert rows[0]["check_failed"] is True
+    assert rows[0]["outdated"] is False
+
+
+def test_a_bundle_style_release_tag_falls_back_to_the_version_tags() -> None:
+    """`fetch_github_release` must return a comparable version or None -- never a tag
+    whose text happens to parse to nothing. The fallback reads `/tags` for the newest
+    `vX.Y.Z`, which is where the action's own version actually lives."""
+    calls: list[str] = []
+
+    def fake_urlopen(request, timeout):  # noqa: ANN001, ARG001
+        calls.append(request.full_url)
+        body = (
+            b'{"tag_name": "codeql-bundle-v2.27.0"}'
+            if "releases/latest" in request.full_url
+            else b'[{"name": "codeql-bundle-v2.27.0"}, {"name": "v4.37.9"}, {"name": "v4.37.8"}]'
+        )
+
+        class _Response:
+            def read(self) -> bytes:
+                return body
+
+            def __enter__(self) -> _Response:
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+        return _Response()
+
+    original = checker.urllib.request.urlopen
+    checker.urllib.request.urlopen = fake_urlopen
+    try:
+        latest = checker.fetch_github_release("github/codeql-action/init")
+    finally:
+        checker.urllib.request.urlopen = original
+
+    assert latest == "4.37.9"
+    # The sub-path never reaches the API: releases and tags live on the repository.
+    assert all("codeql-action/init" not in url for url in calls)
+
+
+def test_a_token_is_sent_when_the_environment_has_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Anonymous api.github.com allows 60 requests an hour, and hosted runners share
+    that pool; past it every Action row reads "unknown" and the check goes quiet."""
+    seen: dict[str, str] = {}
+
+    def fake_urlopen(request, timeout):  # noqa: ANN001, ARG001
+        seen.update(request.headers)
+
+        class _Response:
+            def read(self) -> bytes:
+                return b'{"tag_name": "v7.0.1"}'
+
+            def __enter__(self) -> _Response:
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+        return _Response()
+
+    monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    monkeypatch.setattr(checker.urllib.request, "urlopen", fake_urlopen)
+
+    assert checker.fetch_github_release("actions/checkout") == "7.0.1"
+    assert seen.get("Authorization") == "Bearer secret-token"
+
+
+def test_the_repos_own_codeql_pins_reach_the_report() -> None:
+    """The live contract: both codeql.yml declarations must be collected."""
+    names = {action["name"] for action in checker.load_workflow_actions()}
+
+    assert "github/codeql-action/init" in names
+    assert "github/codeql-action/analyze" in names
+
+
+def test_report_puts_raising_the_declaration_first_and_still_names_both_escape_hatches() -> None:
+    """The report is where the policy is actually read, so the order encodes it.
+
+    Under the 2026-09-05 reversal the default answer to a red line is to raise the
+    declaration; a hold or a deferral is the exception, for something that would
+    genuinely break now. A report that led with the escape hatches would teach the
+    opposite -- so this asserts the ordering, not just that the words appear.
+    """
     report = checker.render_markdown([], [])
 
+    assert "raise the declaration" in report
+    assert "docs/DIVERGENCE.md" in report
     assert "freshness-hold:" in report
     assert "dependency-deferrals.json" in report
-    assert "mute button" in report
+    assert "waiting for upstream to move first" in report
+    assert report.index("raise the declaration") < report.index("freshness-hold:")
 
 
 def test_report_has_a_section_for_each_declaration_source() -> None:

@@ -43,6 +43,11 @@ jobs:
 
       - name: Check declared dependency ranges
         id: deps
+        # Without a token the Actions half of the report resolves against the anonymous
+        # api.github.com limit, which hosted runners share; past it every Action row
+        # reads "latest unknown" and the check goes quiet without failing.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: >-
           python tools/check_dependency_freshness.py
           --github-output

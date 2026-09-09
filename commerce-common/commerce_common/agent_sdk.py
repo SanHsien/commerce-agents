@@ -9,9 +9,11 @@ Importing it requires ``claude-agent-sdk``.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import shutil
+import stat
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,6 +53,25 @@ index above, invoke `Skill` with that skill's name before acting. Everything els
 above applies unchanged."""
 
 
+def _remove_tree(path: Path) -> None:
+    """``shutil.rmtree`` that also works when an entry carries the read-only attribute.
+
+    The copy branch below reaches for ``shutil.copytree`` wherever symlinks are
+    unavailable, and ``copytree`` copies directory metadata -- the Windows read-only
+    attribute included. ``os.rmdir`` refuses a read-only directory, so the *next* call
+    fails with ``PermissionError: [WinError 5]`` while removing the copy it made itself.
+    Any checkout whose directories carry that attribute reproduces it; OneDrive's Files
+    On-Demand sets it on every directory it manages, which is how this was found.
+    ``os.chmod`` on Windows means exactly "clear read-only", and on POSIX it adds owner
+    write to a tree that is about to be deleted, so the same two lines serve both.
+    """
+    for entry in (path, *path.rglob("*")):
+        # A dangling link or a race with another writer: let rmtree report what matters.
+        with contextlib.suppress(OSError):
+            entry.chmod(entry.stat().st_mode | stat.S_IWRITE)
+    shutil.rmtree(path)
+
+
 def ensure_project_skills(skills_dir: Path, project_root: Path) -> Path:
     """Link every skill under ``skills_dir`` into ``project_root/.claude/skills`` (copied
     where symlinks are unavailable), replacing any entry that is not a link to the current
@@ -67,7 +88,7 @@ def ensure_project_skills(skills_dir: Path, project_root: Path) -> Path:
         if entry.is_symlink() or entry.is_file():
             entry.unlink()
         else:
-            shutil.rmtree(entry)
+            _remove_tree(entry)
     for name in sorted(current):
         link = target_root / name
         if link.is_symlink():

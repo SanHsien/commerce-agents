@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import stat
 
 import pytest
 
@@ -171,4 +172,38 @@ def test_ensure_project_skills_refreshes_a_copied_skill(tmp_path, monkeypatch):
     assert not (target / "alpha").is_symlink()
     (source / "alpha" / "SKILL.md").write_text("---\nname: x\ndescription: y\n---\nsecond")
     ensure_project_skills(source, project)
+    assert (target / "alpha" / "SKILL.md").read_text().endswith("second")
+
+
+def test_ensure_project_skills_replaces_a_read_only_copy(tmp_path, monkeypatch):
+    """A refresh must survive the copy carrying a read-only directory.
+
+    `copytree` copies directory metadata, so the copy inherits whatever the source
+    directory has. Removing a read-only directory fails on Windows (`os.rmdir` raises
+    `PermissionError`) and on POSIX (unlinking a child needs write on its parent), so
+    the second call used to fail on the copy the first one made. Any checkout whose
+    directories carry that bit reproduces it -- OneDrive's Files On-Demand sets it on
+    every directory it manages, which is how this was found.
+    """
+    source = tmp_path / "skills"
+    (source / "alpha").mkdir(parents=True)
+    (source / "alpha" / "SKILL.md").write_text("---\nname: x\ndescription: y\n---\nfirst")
+    project = tmp_path / "runtime"
+
+    def no_symlinks(self, *args, **kwargs):
+        raise OSError("symlinks unavailable")
+
+    monkeypatch.setattr(type(source), "symlink_to", no_symlinks)
+    target = ensure_project_skills(source, project)
+    copied = target / "alpha"
+    assert not copied.is_symlink()
+
+    copied.chmod(stat.S_IREAD | stat.S_IEXEC)
+    try:
+        (source / "alpha" / "SKILL.md").write_text("---\nname: x\ndescription: y\n---\nsecond")
+        ensure_project_skills(source, project)
+    finally:
+        if copied.exists():
+            copied.chmod(stat.S_IRWXU)
+
     assert (target / "alpha" / "SKILL.md").read_text().endswith("second")

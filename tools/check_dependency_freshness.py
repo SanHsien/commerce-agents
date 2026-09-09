@@ -49,8 +49,13 @@ REQUIREMENT_FILES = ("requirements-dev.txt",)
 _REQUIREMENT_RE = re.compile(r"^([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(.*)$")
 _MINIMUM_RE = re.compile(r"(>=|>|==|~=)\s*([0-9][0-9A-Za-z.!+_-]*)")
 _RELEASE_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)*")
+# `owner/repo`, optionally followed by a sub-path: `github/codeql-action/init` is one
+# action published from a directory of `github/codeql-action`. An `owner/repo`-only
+# pattern silently matched nothing on those lines, so codeql.yml's two pins never
+# reached the report at all -- a check that is blind to a declaration is worse than one
+# that reports it stale.
 _USES_RE = re.compile(
-    r"^\s*(?:-\s*)?uses:\s*([\w.\-]+/[\w.\-]+)@([0-9a-fA-F]{40}|\S+)"
+    r"^\s*(?:-\s*)?uses:\s*([\w.\-]+/[\w.\-]+(?:/[\w.\-]+)*)@([0-9a-fA-F]{40}|\S+)"
     r"(?:\s*#\s*(.*))?\s*$",
     re.MULTILINE,
 )
@@ -233,19 +238,75 @@ def fetch_pypi_version(package_name: str, timeout: float = 10.0) -> str | None:
     return str(version) if version else None
 
 
+def action_repository(action_name: str) -> str:
+    """The `owner/repo` that publishes an action, dropping any sub-path.
+
+    `github/codeql-action/init` and `github/codeql-action/analyze` ship from directories
+    of one repository and share its releases; asking the API for `repos/github/
+    codeql-action/init/releases/latest` 404s, which the caller would read as "could not
+    check" rather than as the parsing bug it is.
+    """
+    owner, _, rest = action_name.partition("/")
+    return f"{owner}/{rest.split('/', 1)[0]}" if rest else action_name
+
+
 def fetch_github_release(action_name: str, timeout: float = 10.0) -> str | None:
-    quoted_name = urllib.parse.quote(action_name, safe="/")
+    """The latest release tag for an action, or None when it cannot be read.
+
+    The token matters: unauthenticated api.github.com allows 60 requests an hour per
+    address, and past it every lookup here returns 403. That reads as "latest unknown"
+    on every Action row at once -- a whole half of the report going quiet without
+    saying why -- so `GITHUB_TOKEN` (or `GH_TOKEN`) is sent when the environment has
+    one. Absent a token this still works, just against the anonymous limit.
+    """
+    quoted_name = urllib.parse.quote(action_repository(action_name), safe="/")
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": USER_AGENT}
+    token = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(
         f"https://api.github.com/repos/{quoted_name}/releases/latest",
-        headers={"Accept": "application/vnd.github+json", "User-Agent": USER_AGENT},
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError):
+        payload = {}
+    tag = str(payload.get("tag_name") or "")
+    if release_key(tag) is not None:
+        return tag.lstrip("vV")
+    # Some repositories tag their latest *release* with something that is not the
+    # action's version: `github/codeql-action` names it `codeql-bundle-v2.27.0`, the
+    # CodeQL bundle, while the action itself moves on `v4.37.9` tags. Comparing a
+    # `v4.37.9` pin against a bundle tag yields an unparsable "latest" that scores as
+    # not-outdated -- a false green. Fall back to the version tags themselves.
+    return _fetch_latest_version_tag(quoted_name, headers, timeout)
+
+
+def _fetch_latest_version_tag(
+    quoted_name: str, headers: dict[str, str], timeout: float
+) -> str | None:
+    """The highest `vX.Y.Z` tag on a repository, ignoring tags that are not versions."""
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{quoted_name}/tags?per_page=100", headers=headers
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+            tags = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError):
         return None
-    tag = payload.get("tag_name")
-    return str(tag).lstrip("vV") if tag else None
+    if not isinstance(tags, list):
+        return None
+    best: tuple[tuple[int, ...], str] | None = None
+    for entry in tags:
+        name = str((entry or {}).get("name") or "") if isinstance(entry, dict) else ""
+        key = release_key(name)
+        if key is None or not name.lstrip("vV")[:1].isdigit():
+            continue
+        if best is None or key > best[0]:
+            best = (key, name.lstrip("vV"))
+    return best[1] if best else None
 
 
 def collect_status(
@@ -323,23 +384,32 @@ def render_markdown(
             "",
             "Declared ranges are compared against PyPI (Python dev dependencies) and",
             "the GitHub Releases API (pinned Actions). The installed environment is",
-            "not inspected and no file is edited by this check. `requirements.txt`",
-            "(upstream's exact runtime pins) and `examples/package-lock.json`",
-            "(upstream's npm lockfile) are out of scope; see the module docstring.",
+            "not inspected and no file is edited by this check. `requirements.txt` and",
+            "`examples/package-lock.json` are out of scope here (see the module",
+            "docstring); they are tracked by the `pip` and `npm` Dependabot ecosystems,",
+            "with `tools/check_pin_bounds.py` guarding the pins against what the",
+            "`pyproject.toml` files declare.",
             "",
             "## Review policy",
             "",
-            "0. A red line has exactly two honest exits, and both leave a reason behind:",
-            "   `# freshness-hold: <why>` on the declaring line for a standing policy, or",
-            "   an entry in `.github/dependency-deferrals.json` with `deferredLatest` for",
-            '   "reviewed, not now" -- that one expires by itself once the upstream source',
-            "   moves past the release it was reviewed against. Raising the declared floor",
-            "   to silence the report is not one of them: the declaration is a compatibility",
-            "   promise, not a mute button.",
+            "0. The default answer to a red line is to raise the declaration. This fork",
+            "   tracks upstream releases directly and does not hold a version back to",
+            "   keep an upstream-owned file at zero diff; if raising it means editing an",
+            "   upstream-owned file, add the row to `docs/DIVERGENCE.md` in the same",
+            "   change. See the 2026-09-05 policy decisions in `docs/DECISIONS.md`.",
             "1. Read the release notes, and check the supported Python versions.",
-            "2. Run `python -m pytest` and `ruff check` before widening a Python range.",
+            "2. Run `python -m pytest` and `ruff check` before raising anything, and",
+            "   `tools/check_pin_bounds.py` if the new version could leave a range some",
+            "   `pyproject.toml` declares.",
             "3. Repin a GitHub Action by its new commit SHA with a `# vX.Y.Z` comment; do",
             "   not switch a pinned SHA back to a floating tag.",
+            "4. Only when raising it would genuinely break something now, record why and",
+            "   leave the reason behind: `# freshness-hold: <why>` on the declaring line",
+            "   for a standing policy, or an entry in",
+            '   `.github/dependency-deferrals.json` with `deferredLatest` for "reviewed,',
+            '   not now" -- that one expires by itself once the upstream source moves',
+            "   past the release it was reviewed against. Neither is a place to park",
+            '   "waiting for upstream to move first".',
             "",
         ]
     )
