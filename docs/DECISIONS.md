@@ -311,3 +311,24 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 並補上程式碼，等於是新內容，要重新審查而不是延用本次的「觀察」判決）。
 
 
+## 2026-09-11（續）：上游 #32 審查；#30／#31 已由本 fork 的 Dependabot 安全更新採納
+
+**#30／#31 已採納**：同日替本 fork 開啟 Dependabot alerts 與自動安全更新後（GitHub 對 fork 預設關閉），
+Dependabot 立即對同樣三筆漏洞開了本 fork 自己的 PR：`SanHsien/commerce-agents#1`（sharp）與
+`#2`（next）。讀 diff 後確認 `#2` 的 lockfile 同時把 `next` 解析到 `16.3.4`、`sharp` 解析到 `0.35.4`
+（含 `@img/sharp-win32-x64`），是 `#1` 的超集，且兩個 PR 的 8 項必要檢查全過。合併 `#2`
+（`c85b697`）、以「由 #2 涵蓋」關閉 `#1`、刪除兩端分支。GitHub 隨即將
+GHSA-2xp9-vwfh-vxw4、GHSA-p293-qw3h-jr36（next，CRITICAL）與 GHSA-rgj7-g3m4-5g8c（sharp，HIGH）
+標為 fixed，open alerts 歸零。上表 #30／#31 的「採納候選」因此已完成；沒有從上游分支取碼。
+這次合併改了 9 個**上游持有**的檔案（8 個 web app 的 `package.json` 與 `examples/package-lock.json`），依本 fork 的維護契約**必須**登記 `docs/DIVERGENCE.md`，已補 9 列並附跟進上游的判準。（初稿曾寫「不另登記」，是錯的，被 `tools/check_divergence.py` 當場擋下——這正是那道機器檢查存在的理由。）
+
+**#32 審查**：
+
+| PR | 標題 | 實際狀態 / head | 判決 | 理由（附證據） |
+|---|---|---|---|---|
+| #32 | Add Trustabl Agent Scanner to CI | open, non-draft，作者 `trustabl-kathrina`，2026-09-11 開，`f662f8c` | **拒絕** | 只新增 `.github/workflows/trustabl.yml`（+33）。本文開頭即是廠商推銷語（"We came across your repo…"），附帶的 HIGH「發現」是對 `plugins/commerce-builder/skills/*/SKILL.md` 用字的關鍵字啟發式（例如敘述提到 PII 就判 HIGH），不是程式缺陷。該 workflow 在每個 push 與 PR 上執行未經審查的第三方 Action `trustabl/trustabl-action@973f666`，並授予 `security-events: write` 與 `pull-requests: write`，等於把寫入權交給一個本 fork 從未審過的供應商；同時設 `continue-on-error: true`，**永遠不會讓 CI 變紅**——不會失敗的檢查不是閘門，只增加供應鏈攻擊面。本 fork 已在 `.github/workflows/codeql.yml` 對 `python` 與 `javascript-typescript` 跑 `security-extended`。 |
+
+**#32 的再審觸發條件**：維護者決定要引入 agent skill 掃描器時，另開一個有界變更——審查該 Action 的
+原始碼與釘選 SHA、把權限縮到只讀或只寫 `security-events`、並讓它成為**會失敗**的必要檢查，而不是
+advisory。
+

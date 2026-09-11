@@ -129,6 +129,15 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "commerce-common/tests/test_agent_sdk.py",
         "commerce-common/tests/test_memory_stores.py",
         "examples/package.json",
+        "examples/package-lock.json",
+        "examples/retail/storefront-web/package.json",
+        "examples/retail/merchant-web/package.json",
+        "examples/travel/storefront-web/package.json",
+        "examples/travel/merchant-web/package.json",
+        "examples/telecom/storefront-web/package.json",
+        "examples/telecom/merchant-web/package.json",
+        "examples/entertainment/storefront-web/package.json",
+        "examples/entertainment/merchant-web/package.json",
         "examples/web-shared/storefront/orders.tsx",
     }
 
