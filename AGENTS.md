@@ -92,14 +92,20 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
   （`.github/workflows/pin-bounds.yml`）與本機 gate 上。pin 掉出範圍時**把 pyproject 的範圍
   在同一個變更裡一起提高並登記分岔**，不要關掉檢查。
 - **Dependabot PR 一律人工讀 diff 後合併，不開 auto-merge。**
-- **產品內容以上游為準，但依賴與釘選版本直接跟上游最新版走**：`commerce-common/`、
-  `shopping-agent/`、`merchant-agent/`、`examples/`、`plugins/`、`.claude-plugin/`、
-  `docs/{safety,backends,deployment}.md`、`scripts/`、`requirements.txt`、`pytest.ini`、
-  `.env.example`、`LICENSE` 不因本線維護需求改寫。`requirements-dev.txt`（ruff 版本、
-  `tzdata`）與 `.github/workflows/ci.yml`（三個 Action 釘 SHA）**有**已記錄的 fork
-  修正——2026-09-05 起不再因為「這是上游持有的檔案」而保留落後版本或繞道，登記與跟進上游時
-  的判準見 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md)，由
-  [`tools/check_divergence.py`](tools/check_divergence.py) 機器強制此表與實際改動一致。
+- **上游持有的檔案可以改，但每一處都要登記**：`commerce-common/`、`shopping-agent/`、
+  `merchant-agent/`、`examples/`、`plugins/`、`.claude-plugin/`、`docs/{safety,backends,deployment}.md`、
+  `scripts/`、`requirements*.txt`、`pytest.ini`、`.env.example`、`LICENSE` 預設跟隨上游，**不為
+  維護上的方便改寫**；但以下三類改動是允許的，而且已經在做：
+  1. 依賴與釘選版本直接跟最新（含安全性更新）；
+  2. Windows 平台缺陷的修正（例如唯讀目錄讓 `ensure_project_skills` 刪不掉副本）；
+  3. **採納上游尚未合併的 PR**——先在 [`docs/DECISIONS.md`](docs/DECISIONS.md) 審查並判為
+     「採納候選」，確認缺陷在本 fork 仍存在，帶上該 PR 的測試（沒有就補），做突變驗證，
+     再移植；判決改成「已採納（commit）」。
+  
+  2026-09-05 起不再因為「這是上游持有的檔案」而保留落後版本或繞道。**不論哪一類，改到上游持有
+  的檔案就必須在 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md) 登記一列**，最後一欄寫跟進上游時
+  的可執行判準；[`tools/check_divergence.py`](tools/check_divergence.py) 機器強制登記表與實際
+  改動一致，契約測試 `tests/test_fork_divergence.py` 釘了完整清單，新增登記時要同步加入。
 - **文件語言**：本 fork 新增的維護文件（本檔、`FORK.md`、`NOTICE.md`、`README.md`、
   `CHANGELOG.md`、`docs/DECISIONS.md` 等）用繁體中文；產品程式碼、prompt、skill、範例的語言
   跟隨上游（英文），不因本線需求翻譯。
