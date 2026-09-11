@@ -157,6 +157,14 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "examples/travel/api/tests/test_mock_travel.py",
         "examples/entertainment/api/ticketing.py",
         "examples/entertainment/api/tests/test_holds.py",
+        "commerce-common/commerce_common/config.py",
+        "commerce-common/tests/test_config.py",
+        "tests/test_turn_loop.py",
+        "examples/demo_common/host.py",
+        "examples/demo_common/tests/test_host.py",
+        "examples/demo_common/storefront.py",
+        "examples/demo_common/merchant.py",
+        "examples/demo_common/tests/contract.py",
     }
 
 
