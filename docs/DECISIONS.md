@@ -259,16 +259,16 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 | #5 | scaffold-commerce-agent.md 文法：「write the backend as X is written」→「the way X is written」 | open, `b808b55` | 採納候選（低） | 原句 `write the backend as MockRetail... is written` 語意不通順（`as X is written` 不成立的比較結構）；新句可讀。本 fork 該行現狀與上游基準相同（`sed -n '179p'` 確認），未分岔。 |
 | #6 | docs/backends.md 文法：刪掉贅字 `stays` | open, `f1043f4` | 採納候選（低） | 原句「prices stays this way」主謂不一致且贅字；新句「prices this way」正確。本 fork 該行未分岔（現狀與上游基準相同）。 |
 | #7 | Add WebMCP support | open, `5649221` | 觀察／需獨立評估 | 跨 4 個垂直（retail/travel/telecom/entertainment）× storefront/merchant 共 26 個檔案、新增 `web-shared` 的 `useWebMcpTools`/`createStorefrontWebMcpTools`/`createMerchantWebMcpTools`，是全新能力（瀏覽器端暴露唯讀 MCP 工具），不是缺陷修正。雖然標了 `"risk":"read-only"`／`"untrustedContent":true` 顯示作者有意識到信任邊界，但範圍與安全影響（瀏覽器暴露的工具端點如何綁定 session、是否可被同頁面其他腳本呼叫）需要獨立、有邊界的審查，不適合塞進本輪 PR 分類判決。 |
-| #8 | shopping executor：cart quantity 驗成 argument error 而非 outage | open, `0a11006` | 採納候選（中） | 已重現缺陷：`shopping-agent/core/shopping_agent/executor.py:165,175` 現狀是 `int(tool_input.get("quantity") or 1)`，`quantity="abc"` 觸發原生 `ValueError`（不是 `commerce_common.execution.InvalidArguments`），落進 `BaseToolExecutor.execute` 的 `except Exception` 泛用分支（`commerce-common/commerce_common/execution.py:219-223`），回報成「unavailable」而非具名的 argument 錯誤。PR 改用既有的 `parse_argument()`（同檔案已用於 `SearchFilters`，`executor.py:135`），做法與現有慣例一致。 |
+| #8 | shopping executor：cart quantity 驗成 argument error 而非 outage | open, `0a11006` | **已採納（`4dc206d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/executor.py:165,175` 現狀是 `int(tool_input.get("quantity") or 1)`，`quantity="abc"` 觸發原生 `ValueError`（不是 `commerce_common.execution.InvalidArguments`），落進 `BaseToolExecutor.execute` 的 `except Exception` 泛用分支（`commerce-common/commerce_common/execution.py:219-223`），回報成「unavailable」而非具名的 argument 錯誤。PR 改用既有的 `parse_argument()`（同檔案已用於 `SearchFilters`，`executor.py:135`），做法與現有慣例一致。 |
 | #9 | shopping cards：model-authored `reason` 文字進 host 前先過 fence sanitizer | open, `61bad1c` | **已採納（`489286d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/enrichment.py:92,213` 現狀直接把 `pick.reason`／`pick["reason"]`（模型產生的文字）塞進 UI payload，未過 `STOREFRONT_FENCE.sanitize_text`。`commerce-common/commerce_common/fencing.py` 已有 `Fence.sanitize_text`，本專案設計規則（`AGENTS.md`「第三方內容一律圈在 fence 裡」）與既有的 ReDoS 修補案例（`docs/DIVERGENCE.md` 的 `orders.tsx` 一列）都是同一類「model/third-party 文字進 host 渲染層前要清洗」的原則，這裡是一個遺漏點：模型可在 `reason` 裡塞入 fence 標記或不可見字元。 |
-| #10 | merchant guardrails：價格超過兩位小數視為違規 | open, `f184ed9` | 採納候選（中） | 已重現缺陷：`merchant-agent/core/merchant_agent/changes.py` 的 `check_guardrails`（約 70 行起）目前沒有小數位檢查，`79.795` 這類價格可以通過寫入閘門。與既有的 `check_pin_bounds.py`／guardrails 精神一致（寫入操作要在程式碼裡有上限與檢查）。 |
+| #10 | merchant guardrails：價格超過兩位小數視為違規 | open, `f184ed9` | **已採納（`4dc206d`）** | 已重現缺陷：`merchant-agent/core/merchant_agent/changes.py` 的 `check_guardrails`（約 70 行起）目前沒有小數位檢查，`79.795` 這類價格可以通過寫入閘門。與既有的 `check_pin_bounds.py`／guardrails 精神一致（寫入操作要在程式碼裡有上限與檢查）。 |
 | #11 | config：`thinking_effort=None` 時省略 `thinking` 欄位而非送 `{"type":"disabled"}` | open, `0d599b2` | 採納候選（中，建議先核對 API 文件） | 已重現：`commerce-common/commerce_common/config.py:89-91` 現狀在 `thinking_effort is None` 時回傳 `{"thinking": {"type": "disabled"}}`。PR 的理由（「一律思考」的模型會對顯式 `disabled` 回 400）是可信的一類已知 Anthropic API 相容性問題，但本次審查無法直接連線 Anthropic API 文件逐一核對哪些現行模型型號會拒絕 `disabled`；這是行為變更（省略欄位＝聽模型預設，不是「明確關閉」），建議採納前用實際模型呼叫核對一次，而不是照單全收。 |
 | #12 | demo host：缺憑證只印一行警告而非整條 traceback | open, `f269261` | 採納候選（低） | `examples/demo_common/host.py` 目前每次缺憑證的請求都 `logger.exception`（含完整 traceback）；PR 抽出 `credential_problem()` 判斷式並改用 `logger.warning`。純日誌品質改善，風險低。 |
 | #13 | retail merchant mock：4 項修正（未知 metric/segment 誠實回覆、restock 數量必須>0、跨商家 session 隔離） | open, `ac105c1` | **已隨 #25 採納（`489286d`）** | diff 逐行比對（`diff pr13.diff pr25.diff`）確認 #25 是 #13 的嚴格超集：#13 的每一處改動 #25 都有，#25 多了促銷價格地板 guardrail。2026-09-11 移植時只套用 #25 的 diff，未另外處理 #13——`examples/retail/api/mock_merchant.py` 現狀已含 #13 全部 4 項修正。 |
-| #14 | retail cart：以契約的 `Unavailable` 拒絕，數量<1 移除該行 | open, `4c85880` | 採納候選（中高） | 已重現兩個缺陷：① `examples/retail/api/mock_retail.py:301-304` 對「product 不存在」與「family 有 options」丟原生 `KeyError`，繞過 `shopping-agent/core/shopping_agent/executor.py` 的 `domain_error()`（只認 `Unavailable`/`NotOffered`，`executor.py:106-113`），錯誤訊息因此變成泛用的「unavailable」而非具名的變體建議清單。② `examples/demo_common/storefront_fixtures.py:447-451` 的 `set_quantity` 在 `quantity=0` 時只會把該行的 quantity 欄位設成 0，不會移除，購物車因此可能殘留數量為零的品項。 |
-| #15 | merchant fixtures：`stage_campaign` 對不存在的 `campaign_id` 該拒絕 | open, `38c576b` | 採納候選（中） | 已重現：`examples/demo_common/merchant_fixtures.py` 現狀對一個不存在的 `campaign_id` 會落進 `existing is None` 分支、被當成「新增」處理，而不是回報「沒有這個 campaign 可改」。PR 改成優先檢查並拋 `ChangeNotApplicable`（既有例外類別，`merchant-agent/core/merchant_agent/changes.py:26`）。 |
-| #16 | travel mock：售完或不存在的 stay 不可加入購物車 | open, `f91d857` | 採納候選（中高） | 已重現缺陷：`examples/travel/api/mock_travel.py:319` 現狀 `product = self.products[product_id]`（原生 dict 索引），未知 id 丟 `KeyError`，且**完全沒有 `in_stock` 檢查**——售完的 stay 目前可以被加進購物車，這是業務規則層級的正確性缺口，不只是錯誤訊息品質問題。 |
-| #17 | ticketing：`SoldOutError` 應是契約的 `Unavailable` | open, `035ca1b` | 採納候選（中） | 已重現：`examples/entertainment/api/ticketing.py:29` 現狀 `class SoldOutError(TicketingError)`，只繼承 `ValueError`，不是 `shopping_agent.backend.Unavailable`；售完因此被 executor 的 `domain_error()` 判斷為「不是 Unavailable」而走泛用 outage 分支，而非具名的售罄訊息。 |
+| #14 | retail cart：以契約的 `Unavailable` 拒絕，數量<1 移除該行 | open, `4c85880` | **已採納（`4dc206d`）** | 已重現兩個缺陷：① `examples/retail/api/mock_retail.py:301-304` 對「product 不存在」與「family 有 options」丟原生 `KeyError`，繞過 `shopping-agent/core/shopping_agent/executor.py` 的 `domain_error()`（只認 `Unavailable`/`NotOffered`，`executor.py:106-113`），錯誤訊息因此變成泛用的「unavailable」而非具名的變體建議清單。② `examples/demo_common/storefront_fixtures.py:447-451` 的 `set_quantity` 在 `quantity=0` 時只會把該行的 quantity 欄位設成 0，不會移除，購物車因此可能殘留數量為零的品項。 |
+| #15 | merchant fixtures：`stage_campaign` 對不存在的 `campaign_id` 該拒絕 | open, `38c576b` | **已採納（`4dc206d`）** | 已重現：`examples/demo_common/merchant_fixtures.py` 現狀對一個不存在的 `campaign_id` 會落進 `existing is None` 分支、被當成「新增」處理，而不是回報「沒有這個 campaign 可改」。PR 改成優先檢查並拋 `ChangeNotApplicable`（既有例外類別，`merchant-agent/core/merchant_agent/changes.py:26`）。 |
+| #16 | travel mock：售完或不存在的 stay 不可加入購物車 | open, `f91d857` | **已採納（`4dc206d`）** | 已重現缺陷：`examples/travel/api/mock_travel.py:319` 現狀 `product = self.products[product_id]`（原生 dict 索引），未知 id 丟 `KeyError`，且**完全沒有 `in_stock` 檢查**——售完的 stay 目前可以被加進購物車，這是業務規則層級的正確性缺口，不只是錯誤訊息品質問題。 |
+| #17 | ticketing：`SoldOutError` 應是契約的 `Unavailable` | open, `035ca1b` | **已採納（`4dc206d`）** | 已重現：`examples/entertainment/api/ticketing.py:29` 現狀 `class SoldOutError(TicketingError)`，只繼承 `ValueError`，不是 `shopping_agent.backend.Unavailable`；售完因此被 executor 的 `domain_error()` 判斷為「不是 Unavailable」而走泛用 outage 分支，而非具名的售罄訊息。 |
 | #18 | `MerchantBackend` 文件字串：明講「changes 只作用在 session 的 merchant」 | open, `6639dfc` | **已採納（`489286d`）** | 純 docstring 補充（`merchant-agent/core/merchant_agent/backend.py:39-45` 現狀沒有這句），是 #13/#25 所修正之跨商家隔離缺陷的抽象基底類別契約說明；若採納 #25，#18 應一併採納以讓文件與實作一致。 |
 | #19 | 提案：backend 一致性測試套件 | open (draft), `e49a738` | 觀察 | 純文件提案（新增 `docs/proposals/backend-conformance-suite.md`），作者自陳「code follows once the shape is agreed」，尚無程式碼可審。 |
 | #20 | 提案：checkout 二次驗證與 handoff 拒絕 | open (draft), `b3cfe06` | 觀察 | 純文件提案。其中一句技術主張（「`Unavailable` 不是 `run_presentation` 會 relay 的 `ValueError`，所以會回報成 outage」）經查證**與本 repo 現狀不符**：`commerce-common/commerce_common/presentation.py:120-144` 的 `run_presentation` 確實只窄窄地接 `PresentationRefused`/`ValueError`，但呼叫鏈外層的 `BaseToolExecutor.execute`（`commerce-common/commerce_common/execution.py:214-223`）有更寬的 `except Exception` 分支且會先呼叫 `domain_error()`——`shopping-agent/core/shopping_agent/executor.py:106-113` 的 `domain_error()` 已經會正確辨識 `Unavailable` 並回覆具名訊息。也就是說，若 `checkout_handoff` 真的丟出 `Unavailable`，今天的行為就已經是「具名拒絕」而不是「outage」。這不影響提案其餘部分（re-validate at checkout、price staleness）的價值，但引用的既有缺陷描述不準確，列為觀察並註記此點，供日後評估提案時用。 |
@@ -355,4 +355,54 @@ advisory。
 `npm run build`。`docs/DIVERGENCE.md` 新增 5 列登記這五個上游持有檔案的分岔，
 `tests/test_fork_divergence.py` 的釘死集合同步更新。程式碼與測試提交於 `489286d`；本節（決策
 紀錄的判決欄更新）為後續第二個 commit。
+
+## 2026-09-12：B 批六筆（#8、#10、#14、#15、#16、#17）移植完成
+
+**移植方式**：與 A 批相同——讀 diff（`gh pr diff <n> --repo anthropics/commerce-agents`），逐筆
+確認缺陷在本 fork 現狀仍存在後 `git apply --3way` 套用；六筆全部套用乾淨，只有
+`shopping-agent/core/tests/test_executor.py` 因為 A 批（#9）已在檔尾新增過一支測試、#8 的 diff
+也接在同一個檔尾，`git apply --3way` 對這一個檔案回報 merge conflict（3-way 合併產生
+`<<<<<<<`/`=======`/`>>>>>>>` 標記），手動移除標記、保留兩支測試（順序：先 #9 的
+`test_model_authored_card_text_is_sanitized`，再 #8 的
+`test_cart_quantity_that_is_not_a_whole_number_is_an_argument_error`）。其餘檔案與其餘五筆 PR
+均無衝突。沒有 fetch 上游分支、沒有 merge、沒有 cherry-pick。逐筆套用後各自先跑相關套件測試
+再套下一筆，未一次套完六筆才驗證。
+
+- **#8**：`shopping-agent/core/shopping_agent/executor.py` 新增 `_quantity()` 靜態方法，改用
+  `commerce_common.execution.parse_argument()` 搭配新增的 `CartQuantity`（`types.py`）驗證購物車
+  `quantity`；非法值（字串、串列、物件、浮點數）回報具名 `quantity` argument 錯誤而非
+  「temporarily unavailable」outage。新測試
+  `test_cart_quantity_that_is_not_a_whole_number_is_an_argument_error`。
+- **#10**：`merchant-agent/core/merchant_agent/changes.py` 的 `check_guardrails` 新增
+  `abs(after - round(after, 2)) > 1e-9` 檢查，超過兩位小數的價格視為違規。新測試
+  `test_a_price_with_more_than_two_decimals_is_a_violation`。
+- **#14**：`examples/demo_common/storefront_fixtures.py` 的 `set_quantity` 在 `quantity < 1` 時
+  改成移除該行而非留著數量 0／負數的行；`examples/retail/api/mock_retail.py` 的 `add_to_cart`
+  對未知 id 與有選項的 family 分別改拋具名 `Unavailable`（附可售變體清單），取代原生
+  `KeyError`。新測試 `test_a_quantity_under_one_removes_the_line`、
+  `test_cart_refuses_unknown_ids_and_families_in_kind`。
+- **#15**：`examples/demo_common/merchant_fixtures.py` 的 `stage_campaign` 對不存在的
+  `campaign_id` 改拋既有例外類別 `ChangeNotApplicable`，不再落進「當成新增」的分支。新測試
+  `test_stage_campaign_refuses_an_unknown_campaign_id`。
+- **#16**：`examples/travel/api/mock_travel.py` 的 `add_to_cart` 改用 `.get()` 並對未知 id 與
+  售完（`not product.in_stock`）分別拋具名 `Unavailable`，取代原生 `KeyError` 且補上原本完全
+  缺失的售完檢查。新測試 `test_a_sold_out_stay_cannot_be_added`。
+- **#17**：`examples/entertainment/api/ticketing.py` 的 `SoldOutError` 改成
+  `TicketingError, Unavailable` 多重繼承，讓 executor 的 `domain_error()`
+  （`shopping-agent/core/shopping_agent/executor.py`，見 #20 一列的既有查證）正確辨識並 relay
+  具名售罄訊息，而非走泛用 outage 分支。新測試 `test_sold_out_is_the_contracts_unavailable`。
+
+七支新測試（#8、#10、#14 兩支、#15、#16、#17）都已個別做突變驗證：逐一拿掉對應修正，各自
+對應的測試轉紅，改回後全綠；還原一律用編輯工具，未用 `git checkout -- <file>`。
+
+**驗證**：`pytest -q` 1205 passed、1 skipped（基準 1198 passed／1 skipped ＋ 本輪新增 7 支測試）；
+`ruff check .`／`ruff format --check .` 全過；`python scripts/check.py`（`PYTHONIOENCODING=utf-8`
+避開 Windows 主控台 cp950 編碼問題，屬環境限制非本輪缺陷）乾淨；`tools/dev_check.ps1` 全綠
+（ruff check／format、pytest、`scripts/check.py`、`check_links.py`、`check_divergence.py`、
+`check_pin_bounds.py`）；本輪未改動 `examples/` 前端檔案，未另跑 `npm run build`。
+`docs/DIVERGENCE.md` 新增 13 列登記這批上游持有檔案的分岔，並更新既有的
+`shopping-agent/core/tests/test_executor.py` 一列（同時說明 #9 與 #8 兩支測試）；
+`tests/test_fork_divergence.py` 的釘死集合同步更新。`git status --short` 乾淨。程式碼、測試與
+`docs/DIVERGENCE.md`／`tests/test_fork_divergence.py` 登記提交於 `4dc206d`；本節（決策紀錄的
+判決欄更新）為後續第二個 commit。
 
