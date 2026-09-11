@@ -139,6 +139,11 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "examples/entertainment/storefront-web/package.json",
         "examples/entertainment/merchant-web/package.json",
         "examples/web-shared/storefront/orders.tsx",
+        "shopping-agent/core/shopping_agent/enrichment.py",
+        "shopping-agent/core/tests/test_executor.py",
+        "examples/retail/api/mock_merchant.py",
+        "examples/retail/api/tests/test_retail_merchant_backend.py",
+        "merchant-agent/core/merchant_agent/backend.py",
     }
 
 
