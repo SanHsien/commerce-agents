@@ -242,3 +242,72 @@ deselect 繞過而不是修好、每次同步都要重新判斷哪些繞道還�
 
 **代價與防呆**：分岔清單會隨時間變長，只靠人工記憶容易漏登記或忘記刪除已經作廢的列；
 `tools/check_divergence.py` 把這個防呆變成機器檢查，而不是仰賴下一個維護者的記性。
+
+## 2026-09-11：逐筆審查上游 PR #5–#31，`reviewed_pr_through` 推進到 31
+
+**背景**：`upstream-check.yml` 在 2026-09-07 紅燈，因為上游 `anthropics/commerce-agents` 在基準
+（#4）之後新開了 27 筆 PR（`gh pr list --repo anthropics/commerce-agents --state all` 確認全數
+仍是 `OPEN`，非 draft 者皆未被上游合併——這個上游本身聲明不維護、不接受貢獻，PR 停在 open 是
+預期狀態，不是本 fork 需要等待的訊號）。以下逐筆記錄實際讀過 diff（`gh pr diff <n> --repo
+anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，沒有搬移任何程式碼到本 fork**，
+真正移植需要各自的 bounded change、回歸測試與 `docs/DIVERGENCE.md` 登記。
+
+**判決一覽**（判決詞：採納候選／延後／拒絕／觀察）：
+
+| PR | 標題 | 實際狀態 / head | 判決 | 理由（附證據） |
+|---|---|---|---|---|
+| #5 | scaffold-commerce-agent.md 文法：「write the backend as X is written」→「the way X is written」 | open, `b808b55` | 採納候選（低） | 原句 `write the backend as MockRetail... is written` 語意不通順（`as X is written` 不成立的比較結構）；新句可讀。本 fork 該行現狀與上游基準相同（`sed -n '179p'` 確認），未分岔。 |
+| #6 | docs/backends.md 文法：刪掉贅字 `stays` | open, `f1043f4` | 採納候選（低） | 原句「prices stays this way」主謂不一致且贅字；新句「prices this way」正確。本 fork 該行未分岔（現狀與上游基準相同）。 |
+| #7 | Add WebMCP support | open, `5649221` | 觀察／需獨立評估 | 跨 4 個垂直（retail/travel/telecom/entertainment）× storefront/merchant 共 26 個檔案、新增 `web-shared` 的 `useWebMcpTools`/`createStorefrontWebMcpTools`/`createMerchantWebMcpTools`，是全新能力（瀏覽器端暴露唯讀 MCP 工具），不是缺陷修正。雖然標了 `"risk":"read-only"`／`"untrustedContent":true` 顯示作者有意識到信任邊界，但範圍與安全影響（瀏覽器暴露的工具端點如何綁定 session、是否可被同頁面其他腳本呼叫）需要獨立、有邊界的審查，不適合塞進本輪 PR 分類判決。 |
+| #8 | shopping executor：cart quantity 驗成 argument error 而非 outage | open, `0a11006` | 採納候選（中） | 已重現缺陷：`shopping-agent/core/shopping_agent/executor.py:165,175` 現狀是 `int(tool_input.get("quantity") or 1)`，`quantity="abc"` 觸發原生 `ValueError`（不是 `commerce_common.execution.InvalidArguments`），落進 `BaseToolExecutor.execute` 的 `except Exception` 泛用分支（`commerce-common/commerce_common/execution.py:219-223`），回報成「unavailable」而非具名的 argument 錯誤。PR 改用既有的 `parse_argument()`（同檔案已用於 `SearchFilters`，`executor.py:135`），做法與現有慣例一致。 |
+| #9 | shopping cards：model-authored `reason` 文字進 host 前先過 fence sanitizer | open, `61bad1c` | 採納候選（高，安全相關） | 已重現缺陷：`shopping-agent/core/shopping_agent/enrichment.py:92,213` 現狀直接把 `pick.reason`／`pick["reason"]`（模型產生的文字）塞進 UI payload，未過 `STOREFRONT_FENCE.sanitize_text`。`commerce-common/commerce_common/fencing.py` 已有 `Fence.sanitize_text`，本專案設計規則（`AGENTS.md`「第三方內容一律圈在 fence 裡」）與既有的 ReDoS 修補案例（`docs/DIVERGENCE.md` 的 `orders.tsx` 一列）都是同一類「model/third-party 文字進 host 渲染層前要清洗」的原則，這裡是一個遺漏點：模型可在 `reason` 裡塞入 fence 標記或不可見字元。 |
+| #10 | merchant guardrails：價格超過兩位小數視為違規 | open, `f184ed9` | 採納候選（中） | 已重現缺陷：`merchant-agent/core/merchant_agent/changes.py` 的 `check_guardrails`（約 70 行起）目前沒有小數位檢查，`79.795` 這類價格可以通過寫入閘門。與既有的 `check_pin_bounds.py`／guardrails 精神一致（寫入操作要在程式碼裡有上限與檢查）。 |
+| #11 | config：`thinking_effort=None` 時省略 `thinking` 欄位而非送 `{"type":"disabled"}` | open, `0d599b2` | 採納候選（中，建議先核對 API 文件） | 已重現：`commerce-common/commerce_common/config.py:89-91` 現狀在 `thinking_effort is None` 時回傳 `{"thinking": {"type": "disabled"}}`。PR 的理由（「一律思考」的模型會對顯式 `disabled` 回 400）是可信的一類已知 Anthropic API 相容性問題，但本次審查無法直接連線 Anthropic API 文件逐一核對哪些現行模型型號會拒絕 `disabled`；這是行為變更（省略欄位＝聽模型預設，不是「明確關閉」），建議採納前用實際模型呼叫核對一次，而不是照單全收。 |
+| #12 | demo host：缺憑證只印一行警告而非整條 traceback | open, `f269261` | 採納候選（低） | `examples/demo_common/host.py` 目前每次缺憑證的請求都 `logger.exception`（含完整 traceback）；PR 抽出 `credential_problem()` 判斷式並改用 `logger.warning`。純日誌品質改善，風險低。 |
+| #13 | retail merchant mock：4 項修正（未知 metric/segment 誠實回覆、restock 數量必須>0、跨商家 session 隔離） | open, `ac105c1` | **延後**（被 #25 取代，見下方重複關係） | diff 逐行比對（`diff pr13.diff pr25.diff`）確認 #25 是 #13 的嚴格超集：#13 的每一處改動 #25 都有，#25 多了促銷價格地板 guardrail。若採納，直接採 #25 的版本，不要各自處理。 |
+| #14 | retail cart：以契約的 `Unavailable` 拒絕，數量<1 移除該行 | open, `4c85880` | 採納候選（中高） | 已重現兩個缺陷：① `examples/retail/api/mock_retail.py:301-304` 對「product 不存在」與「family 有 options」丟原生 `KeyError`，繞過 `shopping-agent/core/shopping_agent/executor.py` 的 `domain_error()`（只認 `Unavailable`/`NotOffered`，`executor.py:106-113`），錯誤訊息因此變成泛用的「unavailable」而非具名的變體建議清單。② `examples/demo_common/storefront_fixtures.py:447-451` 的 `set_quantity` 在 `quantity=0` 時只會把該行的 quantity 欄位設成 0，不會移除，購物車因此可能殘留數量為零的品項。 |
+| #15 | merchant fixtures：`stage_campaign` 對不存在的 `campaign_id` 該拒絕 | open, `38c576b` | 採納候選（中） | 已重現：`examples/demo_common/merchant_fixtures.py` 現狀對一個不存在的 `campaign_id` 會落進 `existing is None` 分支、被當成「新增」處理，而不是回報「沒有這個 campaign 可改」。PR 改成優先檢查並拋 `ChangeNotApplicable`（既有例外類別，`merchant-agent/core/merchant_agent/changes.py:26`）。 |
+| #16 | travel mock：售完或不存在的 stay 不可加入購物車 | open, `f91d857` | 採納候選（中高） | 已重現缺陷：`examples/travel/api/mock_travel.py:319` 現狀 `product = self.products[product_id]`（原生 dict 索引），未知 id 丟 `KeyError`，且**完全沒有 `in_stock` 檢查**——售完的 stay 目前可以被加進購物車，這是業務規則層級的正確性缺口，不只是錯誤訊息品質問題。 |
+| #17 | ticketing：`SoldOutError` 應是契約的 `Unavailable` | open, `035ca1b` | 採納候選（中） | 已重現：`examples/entertainment/api/ticketing.py:29` 現狀 `class SoldOutError(TicketingError)`，只繼承 `ValueError`，不是 `shopping_agent.backend.Unavailable`；售完因此被 executor 的 `domain_error()` 判斷為「不是 Unavailable」而走泛用 outage 分支，而非具名的售罄訊息。 |
+| #18 | `MerchantBackend` 文件字串：明講「changes 只作用在 session 的 merchant」 | open, `6639dfc` | 採納候選（低，與 #13/#25 搭配） | 純 docstring 補充（`merchant-agent/core/merchant_agent/backend.py:39-45` 現狀沒有這句），是 #13/#25 所修正之跨商家隔離缺陷的抽象基底類別契約說明；若採納 #25，#18 應一併採納以讓文件與實作一致。 |
+| #19 | 提案：backend 一致性測試套件 | open (draft), `e49a738` | 觀察 | 純文件提案（新增 `docs/proposals/backend-conformance-suite.md`），作者自陳「code follows once the shape is agreed」，尚無程式碼可審。 |
+| #20 | 提案：checkout 二次驗證與 handoff 拒絕 | open (draft), `b3cfe06` | 觀察 | 純文件提案。其中一句技術主張（「`Unavailable` 不是 `run_presentation` 會 relay 的 `ValueError`，所以會回報成 outage」）經查證**與本 repo 現狀不符**：`commerce-common/commerce_common/presentation.py:120-144` 的 `run_presentation` 確實只窄窄地接 `PresentationRefused`/`ValueError`，但呼叫鏈外層的 `BaseToolExecutor.execute`（`commerce-common/commerce_common/execution.py:214-223`）有更寬的 `except Exception` 分支且會先呼叫 `domain_error()`——`shopping-agent/core/shopping_agent/executor.py:106-113` 的 `domain_error()` 已經會正確辨識 `Unavailable` 並回覆具名訊息。也就是說，若 `checkout_handoff` 真的丟出 `Unavailable`，今天的行為就已經是「具名拒絕」而不是「outage」。這不影響提案其餘部分（re-validate at checkout、price staleness）的價值，但引用的既有缺陷描述不準確，列為觀察並註記此點，供日後評估提案時用。 |
+| #21 | 提案：ledger claim 與跨程序/當機的 idempotent apply | open (draft), `7adc548` | 觀察 | 純文件提案，無程式碼。 |
+| #22 | 提案：shopper 端訂單動作（取消/退貨/回報問題） | open (draft), `ddf43ac` | 觀察 | 純文件提案，無程式碼。 |
+| #23 | 提案：staged change 衝突標記與 apply 時的過時檢查 | open (draft), `2860826` | 觀察 | 純文件提案，無程式碼。 |
+| #24 | 提案：undo 與排程 apply | open (draft), `14b569a` | 觀察 | 純文件提案，無程式碼。 |
+| #25 | retail merchant mock：促銷價格不可低於地板（另含 #13 全部 4 項修正） | open, `6c2c237` | **採納候選（高，含跨商家隔離修正）** | 見上方 #13 一列的重複關係。額外新增：`stage_promotion` 對「折扣在 `max_promotion_discount_pct` 上限之內、但促銷後價格仍低於 `unit_cost*1.15` 地板」的案例目前**沒有檢查**（本 fork 現狀 `examples/retail/api/mock_merchant.py` 的 `stage_promotion` 只用折扣上限把關，未讀地板），會讓促銷把商品打到低於地板卻不觸發任何 guardrail；PR 補上 `GuardrailViolation`。跨商家隔離部分理由同 #13。 |
+| #26 | scaffold-commerce-agent.md 文法：「Step 2, only the role's...」補上動詞 `read` | open, `59d49e5` | 採納候選（低） | 已重現：原句「on the prototype lane (Step 2), only the role's `backend.py`...」缺主要動詞，`read these` 只管到前半句。新句補上 `read only the role's...`，並把其中一個 `and` 換成 `plus` 消歧巢狀列舉。本 fork 該行未分岔。 |
+| #27 | scaffold-commerce-agent.md 文法：「Both means」→「Both mean」 | open, `f8c5ea4` | 採納候選（低，語感存疑） | 與 #26/#28 同一份檔案的不同行、非重複送件（各自改不同段落，`diff` 逐一核對過起始行號不同）。這一筆本身文法判斷有爭議：`Both` 在此處指稱「選 both 這個選項」時，英語慣用法對其單複數呼應本就分歧（`Both is/means` vs `Both are/mean` 兩種用法皆有母語者使用），不像 #5/#6/#26/#28 那樣是明確語病。建議採納前讓人工再讀一次判斷語感，不必照單全收。 |
+| #28 | scaffold-commerce-agent.md 文法：補上缺漏的關係代名詞 `that` | open, `4598279` | 採納候選（低） | 已重現：原句「the path of the clone the hosted path's `managed-agents/` directory ... are read from」缺 `that` 引導的關係子句連接詞，讀起來像兩個獨立子句黏在一起。新句補上 `that` 後可讀。 |
+| #29 | demo hosts：`build_storefront_host`／`build_merchant_router` 可注入自己的 `SessionStore` | open, `393a7ec` | 採納候選（中） | 現狀 `examples/demo_common/storefront.py`／`merchant.py` 的 `sessions` 一律寫死 `SessionStore(...)`（記憶體型），部署到正式環境無法接自己的資料庫、行程重啟就掉光 session。PR 加一個可選參數、預設值不變，向後相容，是產品化（而非 bug）缺口。 |
+| #30 | Bump `sharp` 0.35.3 → 0.35.4（`/examples`） | open, `e888259` | **採納候選（最高，安全性）** | **GHSA-rgj7-g3m4-5g8c**（HIGH，2026-09-08 發布，`sharp: Vulnerabilities in libheif`）影響版本範圍 `< 0.35.4`，修補版本正是 `0.35.4`。已核對本 fork 現狀鎖定的正是 `sharp@0.35.3`（`examples/package-lock.json:1632` `"version": "0.35.3"`），落在受影響範圍內。查證指令：`gh api graphql -f query='{securityVulnerabilities(package:"sharp",first:20,ecosystem:NPM){nodes{advisory{ghsaId summary severity publishedAt} vulnerableVersionRange firstPatchedVersion{identifier}}}}'`。 |
+| #31 | Bump `next` 16.3.0 → 16.3.4（`/examples`） | open, `2751cfa` | **採納候選（最高，安全性，CRITICAL）** | 本 fork 現狀鎖定 `next@16.3.0`（`examples/package-lock.json:1476` `"version": "16.3.0"`；八個 `package.json` 皆宣告 `^16.3.0`），落在兩個 CRITICAL 漏洞的受影響範圍：**GHSA-2xp9-vwfh-vxw4**（Unauthenticated RCE in Image Optimization API using AVIF files，範圍 `>=16.0.0,<16.3.3`，修補版 `16.3.3`）與 **GHSA-p293-qw3h-jr36**（Unauthenticated RCE on **Windows-hosted servers**，範圍同上，修補版同上）——後者對這條 Windows-first 維護線尤其相關。PR 升到 `16.3.4`，高於兩者的修補版本，兩個 CVE 都會被涵蓋。查證指令同上，`package: "next"`。 |
+
+**重複／互相取代的 PR 關係**：
+
+- **#13 與 #25**：#25 是 #13 的嚴格超集（`diff` 逐行核對，見上表）。若日後採納，只處理 #25；#13 標記延後。
+- **#5／#26／#27／#28**：標題完全相同（都寫「docs: fix grammar issue in
+  plugins/commerce-builder/commands/scaffold-commerce-agent.md」），**但不是同一筆修正的重送**——
+  四筆改的是檔案裡四個不同段落（第 17、41、122、177 行附近），彼此互不重疊，應各自獨立判斷；
+  唯一需要留意的是 #27 的文法判斷本身有爭議（見上表）。
+- **#6** 是同一位／同類貢獻者對另一份檔案（`docs/backends.md`）的同型態文法修正，與上述四筆不衝突。
+
+**Adopt 候選優先序**（給主 session 決定是否要各自開 bounded change）：
+
+1. **#31**（next 16.3.0→16.3.4，CRITICAL RCE ×2，含 Windows-hosted 那個）
+2. **#30**（sharp 0.35.3→0.35.4，HIGH，libheif）
+3. **#25**（含 #13 全部修正＋促銷地板 guardrail；跨商家隔離是資料完整性/授權缺口）
+4. **#9**（model-authored 文字進 UI 前缺 sanitize，安全相關但影響面小於上面三筆）
+5. **#16**（售完商品可被加入購物車，業務規則缺口）
+6. **#14**（cart 契約錯誤類型＋殘留零數量行）
+7. **#8**、**#17**、**#10**、**#15**、**#18**、**#29**、**#11**（依序：executor 錯誤分類、售罄錯誤分類、guardrail 補洞、fixture 正確性、docstring 補充、production-readiness、API 相容性但需先核對文件）
+8. **#12**、**#5**、**#6**、**#26**、**#27**、**#28**（品質/文件類，低優先）
+9. **#7**、**#19**–**#24**：不進這份 adopt 優先序——#7 需要獨立的安全與範圍審查；#19–#24 是無程式碼的設計提案。
+
+**再審觸發條件**：本輪只推進 `reviewed_pr_through`，不移植程式碼。下一次同步時（`git fetch upstream`
+或 `upstream-check.yml` 排程觸發）：新開的 PR 編號高於 31 才算未審查；已審過的 #5–#31 若在上游
+被關閉、合併或改動 head SHA，視為新事件需要重新讀 diff（尤其 #19–#24 draft 提案若轉成非 draft
+並補上程式碼，等於是新內容，要重新審查而不是延用本次的「觀察」判決）。
+
+
