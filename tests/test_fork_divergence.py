@@ -144,6 +144,19 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "examples/retail/api/mock_merchant.py",
         "examples/retail/api/tests/test_retail_merchant_backend.py",
         "merchant-agent/core/merchant_agent/backend.py",
+        "shopping-agent/core/shopping_agent/executor.py",
+        "shopping-agent/core/shopping_agent/types.py",
+        "merchant-agent/core/merchant_agent/changes.py",
+        "merchant-agent/core/tests/test_changes.py",
+        "examples/demo_common/storefront_fixtures.py",
+        "examples/retail/api/mock_retail.py",
+        "examples/retail/api/tests/test_mock_retail.py",
+        "examples/demo_common/merchant_fixtures.py",
+        "examples/demo_common/tests/test_merchant_fixtures.py",
+        "examples/travel/api/mock_travel.py",
+        "examples/travel/api/tests/test_mock_travel.py",
+        "examples/entertainment/api/ticketing.py",
+        "examples/entertainment/api/tests/test_holds.py",
     }
 
 
