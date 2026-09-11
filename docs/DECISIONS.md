@@ -262,8 +262,8 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 | #8 | shopping executor：cart quantity 驗成 argument error 而非 outage | open, `0a11006` | **已採納（`4dc206d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/executor.py:165,175` 現狀是 `int(tool_input.get("quantity") or 1)`，`quantity="abc"` 觸發原生 `ValueError`（不是 `commerce_common.execution.InvalidArguments`），落進 `BaseToolExecutor.execute` 的 `except Exception` 泛用分支（`commerce-common/commerce_common/execution.py:219-223`），回報成「unavailable」而非具名的 argument 錯誤。PR 改用既有的 `parse_argument()`（同檔案已用於 `SearchFilters`，`executor.py:135`），做法與現有慣例一致。 |
 | #9 | shopping cards：model-authored `reason` 文字進 host 前先過 fence sanitizer | open, `61bad1c` | **已採納（`489286d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/enrichment.py:92,213` 現狀直接把 `pick.reason`／`pick["reason"]`（模型產生的文字）塞進 UI payload，未過 `STOREFRONT_FENCE.sanitize_text`。`commerce-common/commerce_common/fencing.py` 已有 `Fence.sanitize_text`，本專案設計規則（`AGENTS.md`「第三方內容一律圈在 fence 裡」）與既有的 ReDoS 修補案例（`docs/DIVERGENCE.md` 的 `orders.tsx` 一列）都是同一類「model/third-party 文字進 host 渲染層前要清洗」的原則，這裡是一個遺漏點：模型可在 `reason` 裡塞入 fence 標記或不可見字元。 |
 | #10 | merchant guardrails：價格超過兩位小數視為違規 | open, `f184ed9` | **已採納（`4dc206d`）** | 已重現缺陷：`merchant-agent/core/merchant_agent/changes.py` 的 `check_guardrails`（約 70 行起）目前沒有小數位檢查，`79.795` 這類價格可以通過寫入閘門。與既有的 `check_pin_bounds.py`／guardrails 精神一致（寫入操作要在程式碼裡有上限與檢查）。 |
-| #11 | config：`thinking_effort=None` 時省略 `thinking` 欄位而非送 `{"type":"disabled"}` | open, `0d599b2` | 採納候選（中，建議先核對 API 文件） | 已重現：`commerce-common/commerce_common/config.py:89-91` 現狀在 `thinking_effort is None` 時回傳 `{"thinking": {"type": "disabled"}}`。PR 的理由（「一律思考」的模型會對顯式 `disabled` 回 400）是可信的一類已知 Anthropic API 相容性問題，但本次審查無法直接連線 Anthropic API 文件逐一核對哪些現行模型型號會拒絕 `disabled`；這是行為變更（省略欄位＝聽模型預設，不是「明確關閉」），建議採納前用實際模型呼叫核對一次，而不是照單全收。 |
-| #12 | demo host：缺憑證只印一行警告而非整條 traceback | open, `f269261` | 採納候選（低） | `examples/demo_common/host.py` 目前每次缺憑證的請求都 `logger.exception`（含完整 traceback）；PR 抽出 `credential_problem()` 判斷式並改用 `logger.warning`。純日誌品質改善，風險低。 |
+| #11 | config：`thinking_effort=None` 時省略 `thinking` 欄位而非送 `{"type":"disabled"}` | open, `0d599b2` | **已採納（`f814ef9`）** | 已重現：`commerce-common/commerce_common/config.py:89-91` 現狀在 `thinking_effort is None` 時回傳 `{"thinking": {"type": "disabled"}}`。PR 的理由（「一律思考」的模型會對顯式 `disabled` 回 400）是可信的一類已知 Anthropic API 相容性問題，但本次審查無法直接連線 Anthropic API 文件逐一核對哪些現行模型型號會拒絕 `disabled`；這是行為變更（省略欄位＝聽模型預設，不是「明確關閉」），建議採納前用實際模型呼叫核對一次，而不是照單全收。 |
+| #12 | demo host：缺憑證只印一行警告而非整條 traceback | open, `f269261` | **已採納（`f814ef9`）** | `examples/demo_common/host.py` 目前每次缺憑證的請求都 `logger.exception`（含完整 traceback）；PR 抽出 `credential_problem()` 判斷式並改用 `logger.warning`。純日誌品質改善，風險低。 |
 | #13 | retail merchant mock：4 項修正（未知 metric/segment 誠實回覆、restock 數量必須>0、跨商家 session 隔離） | open, `ac105c1` | **已隨 #25 採納（`489286d`）** | diff 逐行比對（`diff pr13.diff pr25.diff`）確認 #25 是 #13 的嚴格超集：#13 的每一處改動 #25 都有，#25 多了促銷價格地板 guardrail。2026-09-11 移植時只套用 #25 的 diff，未另外處理 #13——`examples/retail/api/mock_merchant.py` 現狀已含 #13 全部 4 項修正。 |
 | #14 | retail cart：以契約的 `Unavailable` 拒絕，數量<1 移除該行 | open, `4c85880` | **已採納（`4dc206d`）** | 已重現兩個缺陷：① `examples/retail/api/mock_retail.py:301-304` 對「product 不存在」與「family 有 options」丟原生 `KeyError`，繞過 `shopping-agent/core/shopping_agent/executor.py` 的 `domain_error()`（只認 `Unavailable`/`NotOffered`，`executor.py:106-113`），錯誤訊息因此變成泛用的「unavailable」而非具名的變體建議清單。② `examples/demo_common/storefront_fixtures.py:447-451` 的 `set_quantity` 在 `quantity=0` 時只會把該行的 quantity 欄位設成 0，不會移除，購物車因此可能殘留數量為零的品項。 |
 | #15 | merchant fixtures：`stage_campaign` 對不存在的 `campaign_id` 該拒絕 | open, `38c576b` | **已採納（`4dc206d`）** | 已重現：`examples/demo_common/merchant_fixtures.py` 現狀對一個不存在的 `campaign_id` 會落進 `existing is None` 分支、被當成「新增」處理，而不是回報「沒有這個 campaign 可改」。PR 改成優先檢查並拋 `ChangeNotApplicable`（既有例外類別，`merchant-agent/core/merchant_agent/changes.py:26`）。 |
@@ -280,7 +280,7 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 | #26 | scaffold-commerce-agent.md 文法：「Step 2, only the role's...」補上動詞 `read` | open, `59d49e5` | 採納候選（低） | 已重現：原句「on the prototype lane (Step 2), only the role's `backend.py`...」缺主要動詞，`read these` 只管到前半句。新句補上 `read only the role's...`，並把其中一個 `and` 換成 `plus` 消歧巢狀列舉。本 fork 該行未分岔。 |
 | #27 | scaffold-commerce-agent.md 文法：「Both means」→「Both mean」 | open, `f8c5ea4` | 採納候選（低，語感存疑） | 與 #26/#28 同一份檔案的不同行、非重複送件（各自改不同段落，`diff` 逐一核對過起始行號不同）。這一筆本身文法判斷有爭議：`Both` 在此處指稱「選 both 這個選項」時，英語慣用法對其單複數呼應本就分歧（`Both is/means` vs `Both are/mean` 兩種用法皆有母語者使用），不像 #5/#6/#26/#28 那樣是明確語病。建議採納前讓人工再讀一次判斷語感，不必照單全收。 |
 | #28 | scaffold-commerce-agent.md 文法：補上缺漏的關係代名詞 `that` | open, `4598279` | 採納候選（低） | 已重現：原句「the path of the clone the hosted path's `managed-agents/` directory ... are read from」缺 `that` 引導的關係子句連接詞，讀起來像兩個獨立子句黏在一起。新句補上 `that` 後可讀。 |
-| #29 | demo hosts：`build_storefront_host`／`build_merchant_router` 可注入自己的 `SessionStore` | open, `393a7ec` | 採納候選（中） | 現狀 `examples/demo_common/storefront.py`／`merchant.py` 的 `sessions` 一律寫死 `SessionStore(...)`（記憶體型），部署到正式環境無法接自己的資料庫、行程重啟就掉光 session。PR 加一個可選參數、預設值不變，向後相容，是產品化（而非 bug）缺口。 |
+| #29 | demo hosts：`build_storefront_host`／`build_merchant_router` 可注入自己的 `SessionStore` | open, `393a7ec` | **已採納（`f814ef9`）** | 現狀 `examples/demo_common/storefront.py`／`merchant.py` 的 `sessions` 一律寫死 `SessionStore(...)`（記憶體型），部署到正式環境無法接自己的資料庫、行程重啟就掉光 session。PR 加一個可選參數、預設值不變，向後相容，是產品化（而非 bug）缺口。 |
 | #30 | Bump `sharp` 0.35.3 → 0.35.4（`/examples`） | open, `e888259` | **採納候選（最高，安全性）** | **GHSA-rgj7-g3m4-5g8c**（HIGH，2026-09-08 發布，`sharp: Vulnerabilities in libheif`）影響版本範圍 `< 0.35.4`，修補版本正是 `0.35.4`。已核對本 fork 現狀鎖定的正是 `sharp@0.35.3`（`examples/package-lock.json:1632` `"version": "0.35.3"`），落在受影響範圍內。查證指令：`gh api graphql -f query='{securityVulnerabilities(package:"sharp",first:20,ecosystem:NPM){nodes{advisory{ghsaId summary severity publishedAt} vulnerableVersionRange firstPatchedVersion{identifier}}}}'`。 |
 | #31 | Bump `next` 16.3.0 → 16.3.4（`/examples`） | open, `2751cfa` | **採納候選（最高，安全性，CRITICAL）** | 本 fork 現狀鎖定 `next@16.3.0`（`examples/package-lock.json:1476` `"version": "16.3.0"`；八個 `package.json` 皆宣告 `^16.3.0`），落在兩個 CRITICAL 漏洞的受影響範圍：**GHSA-2xp9-vwfh-vxw4**（Unauthenticated RCE in Image Optimization API using AVIF files，範圍 `>=16.0.0,<16.3.3`，修補版 `16.3.3`）與 **GHSA-p293-qw3h-jr36**（Unauthenticated RCE on **Windows-hosted servers**，範圍同上，修補版同上）——後者對這條 Windows-first 維護線尤其相關。PR 升到 `16.3.4`，高於兩者的修補版本，兩個 CVE 都會被涵蓋。查證指令同上，`package: "next"`。 |
 
@@ -405,4 +405,52 @@ advisory。
 `tests/test_fork_divergence.py` 的釘死集合同步更新。`git status --short` 乾淨。程式碼、測試與
 `docs/DIVERGENCE.md`／`tests/test_fork_divergence.py` 登記提交於 `4dc206d`；本節（決策紀錄的
 判決欄更新）為後續第二個 commit。
+
+## 2026-09-12（續）：C 批三筆（#29、#12、#11）移植完成
+
+**移植方式**：與 A、B 批相同——讀 diff（`gh pr diff <n> --repo anthropics/commerce-agents`），
+逐筆確認缺陷在本 fork 現狀仍存在後 `git apply --3way` 套用；三筆全部套用乾淨，沒有 3-way
+merge conflict。沒有 fetch 上游分支、沒有 merge、沒有 cherry-pick。逐筆套用後各自先跑相關
+套件測試再套下一筆。
+
+- **#29**：`examples/demo_common/storefront.py` 的 `StorefrontHost.__init__`／
+  `build_storefront_host`、`examples/demo_common/merchant.py` 的 `build_merchant_router`
+  都新增可選的 `sessions` 參數，省略時維持原本記憶體型 `SessionStore`，預設值不變、向後相容。
+  新測試 `test_a_deployment_supplies_its_own_session_stores`（`examples/demo_common/tests/contract.py`，
+  四個垂直的 `test_contract.py` 都會跑到）。
+- **#12**：`examples/demo_common/host.py` 新增 `credential_problem(error)` 輔助函式，缺憑證時
+  `event_stream` 的例外處理改用 `logger.warning`（只印例外訊息本身，不印憑證值），其餘例外仍
+  `logger.exception`。新測試 `test_credential_problems_are_recognised_by_message`。
+- **#11**：`commerce-common/commerce_common/config.py` 的 `thinking_request_fields()`
+  在 `thinking_effort is None` 時改回傳 `{}`（省略欄位）而非 `{"thinking": {"type": "disabled"}}`。
+  新測試 `test_no_thinking_effort_omits_the_thinking_field`；`tests/test_turn_loop.py` 既有的
+  `test_thinking_follows_the_configured_effort` 斷言同步改成「省略」而非「`disabled`」。
+  **另外訂正了 PR 本身沒有改的 `config.py:32-37` Models 區塊註解**——原文寫「thinking disabled
+  when it is None」，改寫成事實：`None` 是「不指定，交由模型預設」，並列出目前效果（Fable 5、
+  Fable 5.1、Opus 5、Sonnet 5 省略欄位時 adaptive 思考開啟；Opus 4.8、Opus 4.7 不思考）。
+  這是**語意變更**：本 repo 兩個角色的預設模型（shopping 用 `claude-sonnet-5`、merchant 用
+  `claude-opus-5`）上，`None` 從「關閉思考」變成「adaptive 思考開啟」，成本與延遲都改變。理由
+  三項：① Fable 5／5.1 上明確送 `disabled` 必定 400；② Opus 5 在 effort `xhigh`／`max` 時
+  `disabled` 也 400，且強行關閉 thinking 在 Opus 5 上有兩個已知失效模式（工具呼叫偶爾寫進可見
+  文字卻不執行、`<thinking>` 標籤外洩）；③ 採「省略」而非按模型 ID 建白名單，因為白名單每出
+  新模型就會腐爛。全 repo `grep thinking_effort|disabled`（README、docs、skill、plugin、兩個
+  角色的 `config.py`、`tests/test_role_registries.py`）核對過，除了 `config.py:32-37` 這段
+  Models 註解，沒有其他地方把 `None` 描述成「關閉思考」，不需要額外修正。`scripts/check.py`
+  跑過確認乾淨——這段是 Python 註解不是 prompt 文字／工具描述／skill／fence 提示，不需要重新
+  推導 `system.md`。
+
+三支新測試（#29、#12、#11 各一支）都已個別做突變驗證：逐一拿掉對應修正，各自對應的測試（含
+`test_turn_loop.py` 既有測試）轉紅，改回後全綠；還原一律用編輯工具，未用 `git checkout -- <file>`。
+
+**驗證**：`pytest -q` 1211 passed、1 skipped（基準 1205 passed／1 skipped ＋ 本輪新增 6 個測試
+實例——`test_a_deployment_supplies_its_own_session_stores` 因 `contract.py` 被四個垂直各自
+import 而跑 4 次，加上 `#12`／`#11` 各 1 支，共 +6）；`ruff check .`／`ruff format --check .`
+全過；`python scripts/check.py`（`PYTHONIOENCODING=utf-8` 避開 Windows 主控台 cp950 編碼問題）
+乾淨；`tools/dev_check.ps1` 全綠（ruff check／format、pytest、`scripts/check.py`、
+`check_links.py`、`check_divergence.py`：47 upstream file(s) diverge、47 registered、
+`check_pin_bounds.py`）；本輪未改動 `examples/` 前端檔案，未另跑 `npm run build`。
+`docs/DIVERGENCE.md` 新增 8 列登記這批上游持有檔案的分岔，`tests/test_fork_divergence.py` 的
+釘死集合同步更新。`git status --short` 乾淨。程式碼、測試與 `docs/DIVERGENCE.md`／
+`tests/test_fork_divergence.py` 登記提交於 `f814ef9`；本節（決策紀錄的判決欄更新）為後續
+第二個 commit。
 
