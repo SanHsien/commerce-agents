@@ -256,8 +256,8 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 
 | PR | 標題 | 實際狀態 / head | 判決 | 理由（附證據） |
 |---|---|---|---|---|
-| #5 | scaffold-commerce-agent.md 文法：「write the backend as X is written」→「the way X is written」 | open, `b808b55` | 採納候選（低） | 原句 `write the backend as MockRetail... is written` 語意不通順（`as X is written` 不成立的比較結構）；新句可讀。本 fork 該行現狀與上游基準相同（`sed -n '179p'` 確認），未分岔。 |
-| #6 | docs/backends.md 文法：刪掉贅字 `stays` | open, `f1043f4` | 採納候選（低） | 原句「prices stays this way」主謂不一致且贅字；新句「prices this way」正確。本 fork 該行未分岔（現狀與上游基準相同）。 |
+| #5 | scaffold-commerce-agent.md 文法：「write the backend as X is written」→「the way X is written」 | open, `b808b55` | 已採納（本輪） | 原句 `write the backend as MockRetail... is written` 語意不通順（`as X is written` 不成立的比較結構）；新句可讀。本 fork 該行現狀與上游基準相同（`sed -n '179p'` 確認），未分岔。 |
+| #6 | docs/backends.md 文法：刪掉贅字 `stays` | open, `f1043f4` | 拒絕（審查誤判） | 原句「prices stays this way」主謂不一致且贅字；新句「prices this way」正確。本 fork 該行未分岔（現狀與上游基準相同）。 |
 | #7 | Add WebMCP support | open, `5649221` | 觀察／需獨立評估 | 跨 4 個垂直（retail/travel/telecom/entertainment）× storefront/merchant 共 26 個檔案、新增 `web-shared` 的 `useWebMcpTools`/`createStorefrontWebMcpTools`/`createMerchantWebMcpTools`，是全新能力（瀏覽器端暴露唯讀 MCP 工具），不是缺陷修正。雖然標了 `"risk":"read-only"`／`"untrustedContent":true` 顯示作者有意識到信任邊界，但範圍與安全影響（瀏覽器暴露的工具端點如何綁定 session、是否可被同頁面其他腳本呼叫）需要獨立、有邊界的審查，不適合塞進本輪 PR 分類判決。 |
 | #8 | shopping executor：cart quantity 驗成 argument error 而非 outage | open, `0a11006` | **已採納（`4dc206d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/executor.py:165,175` 現狀是 `int(tool_input.get("quantity") or 1)`，`quantity="abc"` 觸發原生 `ValueError`（不是 `commerce_common.execution.InvalidArguments`），落進 `BaseToolExecutor.execute` 的 `except Exception` 泛用分支（`commerce-common/commerce_common/execution.py:219-223`），回報成「unavailable」而非具名的 argument 錯誤。PR 改用既有的 `parse_argument()`（同檔案已用於 `SearchFilters`，`executor.py:135`），做法與現有慣例一致。 |
 | #9 | shopping cards：model-authored `reason` 文字進 host 前先過 fence sanitizer | open, `61bad1c` | **已採納（`489286d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/enrichment.py:92,213` 現狀直接把 `pick.reason`／`pick["reason"]`（模型產生的文字）塞進 UI payload，未過 `STOREFRONT_FENCE.sanitize_text`。`commerce-common/commerce_common/fencing.py` 已有 `Fence.sanitize_text`，本專案設計規則（`AGENTS.md`「第三方內容一律圈在 fence 裡」）與既有的 ReDoS 修補案例（`docs/DIVERGENCE.md` 的 `orders.tsx` 一列）都是同一類「model/third-party 文字進 host 渲染層前要清洗」的原則，這裡是一個遺漏點：模型可在 `reason` 裡塞入 fence 標記或不可見字元。 |
@@ -277,9 +277,9 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 | #23 | 提案：staged change 衝突標記與 apply 時的過時檢查 | open (draft), `2860826` | 觀察 | 純文件提案，無程式碼。 |
 | #24 | 提案：undo 與排程 apply | open (draft), `14b569a` | 觀察 | 純文件提案，無程式碼。 |
 | #25 | retail merchant mock：促銷價格不可低於地板（另含 #13 全部 4 項修正） | open, `6c2c237` | **已採納（`489286d`）** | 見上方 #13 一列的重複關係。額外新增：`stage_promotion` 對「折扣在 `max_promotion_discount_pct` 上限之內、但促銷後價格仍低於 `unit_cost*1.15` 地板」的案例目前**沒有檢查**（本 fork 現狀 `examples/retail/api/mock_merchant.py` 的 `stage_promotion` 只用折扣上限把關，未讀地板），會讓促銷把商品打到低於地板卻不觸發任何 guardrail；PR 補上 `GuardrailViolation`。跨商家隔離部分理由同 #13。 |
-| #26 | scaffold-commerce-agent.md 文法：「Step 2, only the role's...」補上動詞 `read` | open, `59d49e5` | 採納候選（低） | 已重現：原句「on the prototype lane (Step 2), only the role's `backend.py`...」缺主要動詞，`read these` 只管到前半句。新句補上 `read only the role's...`，並把其中一個 `and` 換成 `plus` 消歧巢狀列舉。本 fork 該行未分岔。 |
-| #27 | scaffold-commerce-agent.md 文法：「Both means」→「Both mean」 | open, `f8c5ea4` | 採納候選（低，語感存疑） | 與 #26/#28 同一份檔案的不同行、非重複送件（各自改不同段落，`diff` 逐一核對過起始行號不同）。這一筆本身文法判斷有爭議：`Both` 在此處指稱「選 both 這個選項」時，英語慣用法對其單複數呼應本就分歧（`Both is/means` vs `Both are/mean` 兩種用法皆有母語者使用），不像 #5/#6/#26/#28 那樣是明確語病。建議採納前讓人工再讀一次判斷語感，不必照單全收。 |
-| #28 | scaffold-commerce-agent.md 文法：補上缺漏的關係代名詞 `that` | open, `4598279` | 採納候選（低） | 已重現：原句「the path of the clone the hosted path's `managed-agents/` directory ... are read from」缺 `that` 引導的關係子句連接詞，讀起來像兩個獨立子句黏在一起。新句補上 `that` 後可讀。 |
+| #26 | scaffold-commerce-agent.md 文法：「Step 2, only the role's...」補上動詞 `read` | open, `59d49e5` | 已採納（本輪） | 已重現：原句「on the prototype lane (Step 2), only the role's `backend.py`...」缺主要動詞，`read these` 只管到前半句。新句補上 `read only the role's...`，並把其中一個 `and` 換成 `plus` 消歧巢狀列舉。本 fork 該行未分岔。 |
+| #27 | scaffold-commerce-agent.md 文法：「Both means」→「Both mean」 | open, `f8c5ea4` | 拒絕（審查誤判） | 與 #26/#28 同一份檔案的不同行、非重複送件（各自改不同段落，`diff` 逐一核對過起始行號不同）。這一筆本身文法判斷有爭議：`Both` 在此處指稱「選 both 這個選項」時，英語慣用法對其單複數呼應本就分歧（`Both is/means` vs `Both are/mean` 兩種用法皆有母語者使用），不像 #5/#6/#26/#28 那樣是明確語病。建議採納前讓人工再讀一次判斷語感，不必照單全收。 |
+| #28 | scaffold-commerce-agent.md 文法：補上缺漏的關係代名詞 `that` | open, `4598279` | 已採納（本輪） | 已重現：原句「the path of the clone the hosted path's `managed-agents/` directory ... are read from」缺 `that` 引導的關係子句連接詞，讀起來像兩個獨立子句黏在一起。新句補上 `that` 後可讀。 |
 | #29 | demo hosts：`build_storefront_host`／`build_merchant_router` 可注入自己的 `SessionStore` | open, `393a7ec` | **已採納（`f814ef9`）** | 現狀 `examples/demo_common/storefront.py`／`merchant.py` 的 `sessions` 一律寫死 `SessionStore(...)`（記憶體型），部署到正式環境無法接自己的資料庫、行程重啟就掉光 session。PR 加一個可選參數、預設值不變，向後相容，是產品化（而非 bug）缺口。 |
 | #30 | Bump `sharp` 0.35.3 → 0.35.4（`/examples`） | open, `e888259` | **採納候選（最高，安全性）** | **GHSA-rgj7-g3m4-5g8c**（HIGH，2026-09-08 發布，`sharp: Vulnerabilities in libheif`）影響版本範圍 `< 0.35.4`，修補版本正是 `0.35.4`。已核對本 fork 現狀鎖定的正是 `sharp@0.35.3`（`examples/package-lock.json:1632` `"version": "0.35.3"`），落在受影響範圍內。查證指令：`gh api graphql -f query='{securityVulnerabilities(package:"sharp",first:20,ecosystem:NPM){nodes{advisory{ghsaId summary severity publishedAt} vulnerableVersionRange firstPatchedVersion{identifier}}}}'`。 |
 | #31 | Bump `next` 16.3.0 → 16.3.4（`/examples`） | open, `2751cfa` | **採納候選（最高，安全性，CRITICAL）** | 本 fork 現狀鎖定 `next@16.3.0`（`examples/package-lock.json:1476` `"version": "16.3.0"`；八個 `package.json` 皆宣告 `^16.3.0`），落在兩個 CRITICAL 漏洞的受影響範圍：**GHSA-2xp9-vwfh-vxw4**（Unauthenticated RCE in Image Optimization API using AVIF files，範圍 `>=16.0.0,<16.3.3`，修補版 `16.3.3`）與 **GHSA-p293-qw3h-jr36**（Unauthenticated RCE on **Windows-hosted servers**，範圍同上，修補版同上）——後者對這條 Windows-first 維護線尤其相關。PR 升到 `16.3.4`，高於兩者的修補版本，兩個 CVE 都會被涵蓋。查證指令同上，`package: "next"`。 |
@@ -454,3 +454,37 @@ import 而跑 4 次，加上 `#12`／`#11` 各 1 支，共 +6）；`ruff check .
 `tests/test_fork_divergence.py` 登記提交於 `f814ef9`；本節（決策紀錄的判決欄更新）為後續
 第二個 commit。
 
+## 2026-09-12：D 批文件文法五筆——採納三筆、拒絕兩筆（審查誤判）
+
+**背景**：A–C 批把 #9／#25／#18、#8／#10／#14／#15／#16／#17、#11／#12／#29 全數移植完畢，
+剩下五筆被 2026-09-11 審查列為「採納候選（低）」的純文件文法修正。逐句重讀後**只有三筆成立**。
+
+**採納**（都在 `plugins/commerce-builder/commands/scaffold-commerce-agent.md`）：
+
+- **#5**：原句「write the backend as MockRetail or MockRetailMerchant is written」不成句
+  （`as ... is written` 沒有可解析的結構）。改為「write the backend the way ... is written」。
+- **#26**：prototype lane 的閱讀清單原本是「only the role's backend.py, types.py, and config.py,
+  docs/backends.md, ...」，讀者分不出 `docs/backends.md` 是否也屬於「the role's」。
+  補上動詞與分隔，改成「read only the role's ... plus docs/backends.md, ...」。
+- **#28**：原句「the path of the clone the hosted path's managed-agents/ directory and
+  scripts/deploy_managed_agent.sh are read from」是省略關係代名詞的 garden-path 句
+  （讀者會先把「the clone the hosted path's ...」當成所有格）。在 clone 後面補一個 that。
+
+**拒絕（原審查判斷有誤，在此訂正）**：
+
+- **#6**：`docs/backends.md` 的 `The travel example prices stays this way.` **原句是對的**——
+  `prices` 是動詞、`stays`（住宿）是受詞，整句意思是「旅遊範例就是這樣為住宿定價」。PR 改成
+  `The travel example prices this way.` 反而刪掉受詞、語意變模糊。上游若合併它，本 fork 不跟。
+- **#27**：`Role: shopping agent, merchant agent, or both. Both means two sibling modules, ...`
+  這裡的 `Both` 指稱「both 這個選項」，單數呼應 `means` 才對；改成 `mean` 會被讀成「兩個 agent
+  各自代表兩個 sibling 模組」，與原意不符。2026-09-11 的審查自己也標了「語感存疑、建議人工再讀」，
+  這次就是那次覆核的結果。
+
+**做法**：三筆都只是一行文字，直接以編輯工具改，沒有 `git apply`；沒有測試可加（純文件，無行為）。
+`scripts/check.py` 跑過為 clean——這份是 plugin 的 command 文件，不是 prompt 文字／工具描述／skill／
+fence 提示，不觸發 `system.md` 重新推導。分岔登記在 [`DIVERGENCE.md`](DIVERGENCE.md)，該列的
+「跟進上游時怎麼處理」同時寫明 **#6 與 #27 上游若合併也不要跟**，避免日後同步時把訂正又倒回去。
+
+**這批的通則**：審查階段標為「低風險、清楚的文法修正」的項目，仍然要在移植時逐句重讀。五筆裡兩筆
+是誤判，而且都是「原句用了比較少見但正確的結構」——`prices stays`（動詞＋受詞）與 `Both means`
+（指稱選項的單數）。低風險不等於不必判斷。

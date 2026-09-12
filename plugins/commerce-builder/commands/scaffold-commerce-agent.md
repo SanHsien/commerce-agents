@@ -17,8 +17,8 @@ runs.
 1. The current repo is the reference when `shopping-agent/core/shopping_agent/backend.py` exists;
    otherwise use a local clone, or clone `https://github.com/anthropics/commerce-agents.git` under
    `/tmp`. Note the tag or commit for Step 2b.
-2. Read these before writing code; on the prototype lane (Step 2), only the role's `backend.py`,
-   `types.py`, and `config.py`, `docs/backends.md`, `examples/retail/api/agent_config.py`, and
+2. Read these before writing code; on the prototype lane (Step 2), read only the role's `backend.py`,
+   `types.py`, and `config.py`, plus `docs/backends.md`, `examples/retail/api/agent_config.py`, and
    the role's mock.
    - `commerce-common/commerce_common/__init__.py`, then `fencing.py`, `execution.py`,
      `presentation.py`, `grounding.py`, `memory.py`, and `streaming.py`;
@@ -122,7 +122,7 @@ Play the plan back in one message and get a yes before writing code:
 - v1 index: flows indexed; flows copied and unindexed, with the reason.
 - Gates: fencing, provenance, caps, grounding, the prompt-stability test; merchant agent:
   guardrails, host approval, and the approval surface.
-- Assumptions taken for skipped questions; the reference tag or commit, and the path of the clone
+- Assumptions taken for skipped questions; the reference tag or commit, and the path of the clone that
   the hosted path's `managed-agents/` directory and `scripts/deploy_managed_agent.sh` are read from.
 
 Name the skill behind each line where one applies. On yes, write the plan into the project's
@@ -177,7 +177,7 @@ the composer. Shopping agent: the `checkout` card hands off to question 9's answ
 or a per-seller handoff), a stub with a TODO until then. A project without a frontend starts from the `examples/retail/` web apps over
 `examples/web-shared/` (`npm ci` in `examples/`).
 
-**Fixture-backed backend.** With an export and no systems, write the backend as `MockRetail` or
+**Fixture-backed backend.** With an export and no systems, write the backend the way `MockRetail` or
 `MockRetailMerchant` is written, loading the export where they load
 `examples/demo_common/storefront_fixtures.py` or `merchant_fixtures.py`; index the flows the data
 supports and record "fixture-backed".
