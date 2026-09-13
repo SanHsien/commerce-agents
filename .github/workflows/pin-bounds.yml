@@ -1,0 +1,37 @@
+name: Pin bounds
+
+# Runs on every pull request, which is the point: this is the check that stands between a
+# Dependabot bump and a pin that contradicts what a package declares about itself. The
+# repo's own `ci.yml` never reads the requirements files, so without this a bad bump is
+# green everywhere until someone tries to install a package on its own.
+on:
+  push:
+    branches: [main]
+    paths:
+      - requirements.txt
+      - requirements-dev.txt
+      - "**/pyproject.toml"
+      - tools/check_pin_bounds.py
+      - .github/workflows/pin-bounds.yml
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pin-bounds-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pin-bounds:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      # Standard library only: no install step, so a broken dependency set cannot stop
+      # the check that exists to diagnose it.
+      - name: Check pins against declared ranges
+        run: python tools/check_pin_bounds.py

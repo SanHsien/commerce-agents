@@ -1,0 +1,4 @@
+{
+  "_comment": "Reviewed-but-not-now decisions for tools/check_dependency_freshness.py. A deferral is for a floor that would genuinely break something if raised right now, with the reason recorded here; it is not a place to park 'waiting for upstream to move first' -- this fork now raises its own declared floors directly (ruff, tzdata in requirements-dev.txt; pinned Actions in ci.yml) rather than waiting on upstream's pace. See docs/DIVERGENCE.md and the 2026-09-05 policy-reversal decision in docs/DECISIONS.md. Each entry still needs deferredLatest so it expires by itself once upstream moves past the release it was reviewed against; a permanent policy belongs on the declaring line as `# freshness-hold:` instead.",
+  "deferrals": {}
+}
