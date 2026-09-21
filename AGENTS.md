@@ -21,7 +21,12 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
 - `merchant-agent/core/merchant_agent/`：商家對應版，外加 `changes.py`、`analysis.py`。
 - `*/skills/`：每個角色五個流程，各一個 `SKILL.md`。
 - `*/runtime-messages-api/`、`*/runtime-agent-sdk/`、`*/managed-agents/`：三條跑法。
-- `examples/<vertical>/`：`api/`、`data/`、`storefront-web/`、`merchant-web/`。
+- `examples/<vertical>/`：`api/`、`data/`、`storefront-web/`、`merchant-web/`；服務埠：API
+  8000-8003、storefront-web 3000-3003、merchant-web 3100-3103。
+- `examples/demo_common/`、`examples/web-shared/`：跨垂直範例共用的 API／web 元件；`examples/`
+  是 npm workspace。
+- `requirements.txt` 安裝七個套件與其釘選版本（`requirements-dev.txt` 另加 `pytest`、
+  `ruff`）；`scripts/install.sh` 執行安裝。
 - `plugins/commerce-builder/`：Claude Code plugin。
 - `docs/`：`safety.md`、`backends.md`、`deployment.md`。`scripts/`：安裝、demo、smoke、
   截圖、check、deploy、verify。
@@ -42,9 +47,15 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
 - Python 3.11+、`ruff`（根目錄 `ruff.toml`）、`pytest`（根目錄 `pytest.ini`）、型別標註、
   `pydantic` schema；Web app 是 Next.js + TypeScript。
 - 只有 ACME 這一家虛構公司；deployment/整合目標（README 的 MCP connectors 一節、
-  `docs/deployment.md` 的平台與 SDK 名稱）與 CC0 分類圖片是例外。
+  `docs/deployment.md` 的平台與 SDK 名稱）與 CC0 分類圖片是例外。CC0 分類圖片的來源登記在
+  旁邊的 `IMAGE-CREDITS.md`；有疑慮時重新設計，不要改名沿用既有素材。
 - 改動 prompt 文字、工具描述、skill 或 fence 提示會讓 `system.md` 需要重新推導；
   `scripts/check.py` 會比對。
+- Skill 描述只寫請求類別，不放範例語句；工具描述寫清楚何時適用；範例維持示意即可。
+- 行文：平鋪直敘的陳述句；一件事一個用詞；每個事實只寫一次並指名所屬模組；每個角色用自己的
+  術語；README 只說明這是什麼、怎麼跑、介面在哪裡，不放歷史、日期或過程敘事；先刪減再考慮
+  改寫風格。
+- 新增模組要同步更新本檔與該模組的 README。
 
 ## Fork 維護規則（SanHsien 維護線）
 
@@ -73,6 +84,8 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
   `tools/check_links.py` → `tools/check_divergence.py` → `tools/check_pin_bounds.py`；上游既有的
   `.github/workflows/ci.yml`（Ubuntu，兩個 Python 版本 + web build + no-pypi-fallback）維持
   不動的部分，見 [`docs/DIVERGENCE.md`](docs/DIVERGENCE.md) 例外（釘選的 Action SHA 已改）。
+  更完整的上游驗證（含 deploy dry run 與 web build，`tools/dev_check.ps1` 未涵蓋）：
+  `python scripts/verify_all.py`。
 - **上游同步**：`tools/check_upstream_updates.py` 讀寫 `tools/upstream_baseline.json` 的
   commit／PR／issue 三軸水位，PR／issue 一律用 `--state all` 查。上游關閉了 GitHub Issues，
   issue 軸恆回報「未檢查」而非「沒有新項目」，兩者不可混為一談。決策記錄見
