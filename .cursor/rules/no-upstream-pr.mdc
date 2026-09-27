@@ -1,0 +1,27 @@
+---
+description: PR、push、release 一律指向 SanHsien/commerce-agents；回貢上游需要當次對話明確同意
+alwaysApply: true
+---
+
+# 對外只打本 fork
+
+本 repo fork 自 [`anthropics/commerce-agents`](https://github.com/anthropics/commerce-agents)（Apache License 2.0）。
+PR、push、release 一律指向 `SanHsien/commerce-agents`。
+
+**根因是機制不是粗心：** `gh` 在 fork clone 的預設 repo 就是上游，裸跑 `gh pr create` 必然打上去。
+
+```powershell
+gh repo set-default SanHsien/commerce-agents   # 每個 clone 先跑一次
+gh repo set-default --view                     # 必須回 SanHsien/commerce-agents
+gh pr create --repo SanHsien/commerce-agents --base main --head <分支>
+```
+
+建完**讀輸出的 URL**，owner 必須是 `SanHsien`。不是就立刻 `gh pr close` 留言道歉說明開錯 repo，
+再對 origin 重開，並主動告訴維護者。
+
+**唯一例外：** 維護者在**這次對話**明確同意回貢上游。fork、建環境、開 PR、比照其他 repo、
+合併回 main、「所有專案都照做」都不是例外。上游自己聲明「這是參考實作，不維護、不接受貢獻」
+（見 `README.en.md` 授權一節），所以回貢的門檻本來就更高：先確認是上游會接受的 bug 修正，而不
+是這條維護線獨有的 Windows 骨架或繁中文件。判準見 [`FORK.md`](../../FORK.md)。
+
+也不要 push 到 `upstream` remote，不要 force-push `main`，不要刪 `upstream` remote。

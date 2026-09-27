@@ -1,0 +1,13 @@
+{
+  "name": "acme-examples",
+  "private": true,
+  "workspaces": [
+    "web-shared",
+    "*/storefront-web",
+    "*/merchant-web"
+  ],
+  "scripts": {
+    "prebuild": "node --test web-shared/storefront/*.test.mjs",
+    "build": "npm run build --workspaces --if-present"
+  }
+}
