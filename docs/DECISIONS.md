@@ -488,3 +488,18 @@ fence 提示，不觸發 `system.md` 重新推導。分岔登記在 [`DIVERGENCE
 **這批的通則**：審查階段標為「低風險、清楚的文法修正」的項目，仍然要在移植時逐句重讀。五筆裡兩筆
 是誤判，而且都是「原句用了比較少見但正確的結構」——`prices stays`（動詞＋受詞）與 `Both means`
 （指稱選項的單數）。低風險不等於不必判斷。
+
+## 2026-09-28：E 批三筆（#33、#34、#35）移植完成，上游 PR 水位推進至 35
+
+**移植方式**：讀 diff（`gh pr diff <n> --repo anthropics/commerce-agents`），確認缺陷在本 fork 現狀仍存在後，以 `git apply --3way` 乾淨套用。未 fetch 上游分支、未 merge、未 cherry-pick。逐筆完成移植、補充回歸測試並做突變驗證。
+
+- **#33**（head `00200200:codex/commerce-memory-snapshots`）：`InMemoryMemoryStore` 的 `get_facts` 與 `upsert_facts` 回傳及存入 `MemoryFact` 物件時，改以 `fact.model_copy(deep=True)` 製作隔離快照，避免呼叫端就地修改物件污染底層儲存或造成 dictionary key 脫節。新測試 `test_upsert_keeps_a_snapshot_of_input_facts` 與 `test_recalled_facts_can_be_modified_without_rewriting_storage`（`commerce-common/tests/test_memory_stores.py`）。突變驗證：拿掉 deep copy 後兩筆測試轉紅。
+- **#34**（head `00200200:codex/commerce-frontmatter-fences`）：`parse_skill_md`（`commerce-common/commerce_common/skills.py`）從裸字串 `text.split("---", 2)` 改為全行正規表達式 `^---[ \t]*\r?$`（`re.MULTILINE`）嚴格匹配 frontmatter 邊界，支援 description 或 body 含有 `---` 的合法 Markdown 內容與 CRLF 換行，並在 YAML 語法錯誤或非 mapping 時拋出具名 `SkillLoadError`。新測試 `test_frontmatter_delimiters_in_yaml_and_body` 與 `test_invalid_frontmatter_raises_skill_load_error`（`commerce-common/tests/test_skills.py`）。突變驗證：改回原本的 split 後 7 筆測試全數轉紅。
+- **#35**（head `00200200:codex/commerce-longest-token-match`）：`find_token`（`commerce-common/commerce_common/grounding.py`）改用 `re.finditer` 遍歷所有候選詞，修正原先 `re.search` 只比對第一個 match 導致短詞遮蔽後續長詞的缺陷。新測試 `test_find_token_checks_later_occurrences_of_the_same_pattern`（`commerce-common/tests/test_grounding.py`）。突變驗證：改回 `re.search` 後短詞先出現的 2 筆測試立即轉紅。
+
+**驗證與分岔**：
+- `docs/DIVERGENCE.md` 新增 5 列並更新既有 `commerce-common/tests/test_memory_stores.py` 一列，共計登記 53 處上游持有檔案分岔。
+- `tests/test_fork_divergence.py` 契約測試同步追加這 5 個路徑。
+- `tools/upstream_baseline.json` 的 `reviewed_pr_through` 從 32 推進至 35。
+- `tools/dev_check.ps1` 加入環境變數隔離 `Remove-Item Env:\ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue`，排除全域 proxy 影響。
+

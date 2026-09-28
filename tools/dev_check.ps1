@@ -16,6 +16,7 @@ if (Test-Path -LiteralPath $venvPython) {
 
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
+Remove-Item Env:\ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue
 
 function Invoke-Step {
     param(
