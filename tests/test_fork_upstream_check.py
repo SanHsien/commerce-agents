@@ -28,11 +28,22 @@ def test_baseline_reads_pr_and_issue_watermarks() -> None:
     assert baseline["reviewed_pr_through"] > 0
 
 
-def test_baseline_records_the_known_upstream_branch_list() -> None:
-    """anthropics/commerce-agents carries a single branch at baseline time."""
+def test_baseline_declares_a_branch_list_the_checker_can_compare() -> None:
+    """This used to pin the exact list (`== ["main"]`), which was wrong twice over: it
+    went stale the moment upstream pushed a branch, and it tested the file instead of
+    the behaviour -- nothing compared the list to upstream at all. What the checker
+    actually needs from the baseline is a usable list containing the tracked branch;
+    whether it matches upstream is `collect_new_branches`' job, at runtime."""
     baseline = checker.load_baseline()
+    branches = baseline.get("branches")
 
-    assert baseline.get("branches") == ["main"]
+    assert isinstance(branches, list) and branches
+    assert all(isinstance(name, str) and name for name in branches)
+    assert baseline["branch"] in branches
+    # The shape the axis requires: anything else makes it report UNDECLARED and fail.
+    assert checker.collect_new_branches({"repo": "x", "branches": branches}, Path(".")) is not (
+        checker.UNDECLARED
+    )
 
 
 def test_workflow_is_scheduled_and_fails_on_unreviewed_commits() -> None:
@@ -143,6 +154,101 @@ def test_collect_new_tickets_returns_none_on_a_genuine_failure(monkeypatch: obje
     result = checker.collect_new_tickets(baseline, "pr")
 
     assert result is None
+
+
+def test_collect_new_branches_reports_branches_missing_from_the_baseline(
+    monkeypatch: object,
+) -> None:
+    """The commit axis only reads `baseline["branch"]`, so a branch pushed beside it
+    is invisible unless this axis names it."""
+    import subprocess
+
+    class FakeResult:
+        returncode = 0
+        stdout = (
+            "aaa\trefs/heads/main\n"
+            "bbb\trefs/heads/dependabot/npm_and_yarn/examples/next-16.3.4\n"
+            "ccc\trefs/heads/release/1.x\n"
+        )
+        stderr = ""
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: FakeResult())
+
+    baseline = {"repo": "https://github.com/anthropics/commerce-agents.git", "branches": ["main"]}
+    result = checker.collect_new_branches(baseline, Path("."))
+
+    assert result == ["dependabot/npm_and_yarn/examples/next-16.3.4", "release/1.x"]
+
+
+def test_collect_new_branches_is_quiet_once_every_branch_is_registered(
+    monkeypatch: object,
+) -> None:
+    import subprocess
+
+    class FakeResult:
+        returncode = 0
+        stdout = "aaa\trefs/heads/main\nbbb\trefs/heads/release/1.x\n"
+        stderr = ""
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: FakeResult())
+
+    baseline = {"repo": "https://example.invalid/u.git", "branches": ["main", "release/1.x"]}
+
+    assert checker.collect_new_branches(baseline, Path(".")) == []
+
+
+def test_collect_new_branches_separates_undeclared_from_unavailable(monkeypatch: object) -> None:
+    """A baseline with no `branches` list and a failed `ls-remote` are different
+    problems; neither may read as "nothing new"."""
+    import subprocess
+
+    class Failed:
+        returncode = 128
+        stdout = ""
+        stderr = "fatal: repository not found"
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: Failed())
+
+    assert checker.collect_new_branches({"repo": "x"}, Path(".")) is checker.UNDECLARED
+    assert checker.collect_new_branches({"repo": "x", "branches": "main"}, Path(".")) is (
+        checker.UNDECLARED
+    )
+    assert checker.collect_new_branches({"repo": "x", "branches": ["main"]}, Path(".")) is None
+
+
+def test_collect_new_branches_rejects_an_empty_parse(monkeypatch: object) -> None:
+    """`ls-remote` exiting 0 with nothing this reader recognises means the output
+    shape changed, not that upstream has no branches."""
+    import subprocess
+
+    class FakeResult:
+        returncode = 0
+        stdout = "aaa\trefs/tags/v1.0.0\n"
+        stderr = ""
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: FakeResult())
+
+    baseline = {"repo": "https://example.invalid/u.git", "branches": ["main"]}
+
+    assert checker.collect_new_branches(baseline, Path(".")) is None
+
+
+def test_render_markdown_names_new_upstream_branches() -> None:
+    baseline = {
+        "repo": "https://example.invalid/upstream.git",
+        "branch": "main",
+        "reviewed_through": "a" * 40,
+        "reviewed_date": "2026-09-05",
+        "branches": ["main"],
+    }
+
+    report = checker.render_markdown(
+        baseline, [], prs=[], issues=checker.DISABLED, branches=["release/1.x"]
+    )
+
+    assert "## Upstream branches" in report
+    assert "release/1.x" in report
+    assert "No branches beyond the registered ones." not in report
 
 
 def test_load_baseline_rejects_missing_file(tmp_path: Path) -> None:

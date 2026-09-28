@@ -30,6 +30,10 @@ class ShoppingAgentConfig(BaseAgentConfig):
     # is not wired yet stays on: its backend method raises and the tool answers that it
     # is unavailable.
     enable_cart: bool = True
+    # `enable_checkout` is the one sub-switch: a store can hold a cart while its checkout
+    # handoff is not connected at all. Turning it off with `enable_cart` on removes the
+    # checkout tool and its prompt rules, and leaves the rest of the cart intact.
+    enable_checkout: bool = True
     enable_orders: bool = True
     enable_policies: bool = True
     enable_fulfillment: bool = True
@@ -126,6 +130,8 @@ class ShoppingAgentConfig(BaseAgentConfig):
         names: set[str] = set()
         if not self.enable_cart:
             names |= {"get_cart", "add_to_cart", "update_cart_item", "remove_from_cart", "checkout"}
+        elif not self.enable_checkout:
+            names.add("checkout")
         if not self.enable_orders:
             names |= {"get_orders", "get_order_status", "present_order_status"}
         if not self.enable_policies:

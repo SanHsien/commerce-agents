@@ -171,6 +171,9 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "examples/demo_common/storefront.py",
         "examples/demo_common/merchant.py",
         "examples/demo_common/tests/contract.py",
+        "shopping-agent/core/shopping_agent/config.py",
+        "shopping-agent/core/shopping_agent/prompt.py",
+        "shopping-agent/core/tests/test_prompt.py",
     }
 
 

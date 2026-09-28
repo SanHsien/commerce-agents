@@ -503,3 +503,58 @@ fence 提示，不觸發 `system.md` 重新推導。分岔登記在 [`DIVERGENCE
 - `tools/upstream_baseline.json` 的 `reviewed_pr_through` 從 32 推進至 35。
 - `tools/dev_check.ps1` 加入環境變數隔離 `Remove-Item Env:\ANTHROPIC_BASE_URL -ErrorAction SilentlyContinue`，排除全域 proxy 影響。
 
+
+## 2026-09-28（後續）：上游 PR #36 拆半採納，並補上分支軸這個盲點
+
+### #36 `Poc/chewy shopping agent`（head `c9f0958`，作者 `cgoodloe-chwy`，非 draft，19 檔 +1433／−30）
+
+這筆不是單一主題的 PR，判斷必須拆開，不能整包 adopt 或整包 reject。
+
+**採納（通用缺陷修正）**：`enable_checkout` 子開關。原本 `enable_cart=False` 會一次拿掉購物車與
+結帳五個工具，`enable_cart=True` 則必定在 prompt 裡承諾「checkout stages a summary…」。中間那個
+真實存在的部署形態——**有購物車，但結帳交接沒接上**——無法表達，只能在執行期讓 `checkout` 工具
+爆掉，或把整個購物車關掉。移植 `config.py` 的 `enable_checkout`、`prompt.py` 的條件渲染，以及
+上游附的測試 `test_checkout_can_be_disabled_while_cart_remains_available`。**沒有用
+`git apply`**：PR 本體混著 Chewy POC，整包套不進來，三段都以編輯工具逐段套用後再比對。突變驗證
+做了兩次，兩半各自獨立轉紅（詳見 [`DIVERGENCE.md`](DIVERGENCE.md) 該三列）。
+
+**不採納 `examples/chewy/**`（13 檔）**：這是合作夥伴專屬的 proof-of-concept，帶自己的 `ucp_client.py`、
+`mcp_client.py`、`backend.py` 與 `agent_config.py`。與本 fork 無關，而且引進一整片未經審查的
+第三方整合介面正是 #32 當初被拒的同一個理由（範圍大、無法逐行擔保、對本 fork 沒有對應需求）。
+
+**不採納 `scripts/run_demo.py` 的 chewy vertical**：`web_vertical`／`web_env` 兩個 config 欄位存在的
+唯一目的，是讓 chewy 這個 vertical 借用 retail 的 storefront。上面那段不採納，這段就沒有被使用者。
+留下一組沒有人用的間接層只會讓下次讀 `run_demo.py` 的人去找不存在的呼叫端。
+
+**不採納 storefront-web 的兩支 `.tsx`**：`Chat.tsx` 新增 `NEXT_PUBLIC_CART_ENABLED`、
+`CheckoutSummary.tsx` 新增 `NEXT_PUBLIC_CHECKOUT_POLICY_ENABLED`，兩者都在模組載入時讀
+`process.env` 並以 `!== "false"` 當預設。問題不在旗標本身，而在**同一件事變成兩個真相來源**：
+後端已經有 `enable_cart`／`enable_checkout`（這輪才剛採納），前端再拿一個獨立的環境變數決定要不要
+顯示加入購物車按鈕，兩邊不一致時沒有任何東西會發現。`CheckoutSummary.tsx` 還把
+`STORE_POLICY` 的顯示包在旗標裡卻繼續 import 並使用它（`freeShipping` 的門檻計算仍讀 `STORE_POLICY`），
+等於旗標關掉後政策常數照樣進 bundle、只是不顯示。另外 `at checkout` → `in checkout` 是與本主題
+無關的文案改動。三個理由都指向同一個結論：這是為了讓 retail storefront 兼差當 Chewy 前端而加的
+權宜設定，不是通用能力。
+
+### 分支軸：一個宣稱在追蹤、實際從不比對的清單
+
+排查 #36 時發現上游多了兩條分支（`dependabot/npm_and_yarn/examples/next-16.3.4`、
+`dependabot/npm_and_yarn/examples/sharp-0.35.4`），而 `tools/check_upstream_updates.py`
+**一個字都沒提**。原因：commit 軸只 fetch `baseline["branch"]`（即 `main`）這一個 ref，
+而 baseline 從一開始就記了 `"branches": ["main"]`、並在 notes 裡寫明「這是上游當時唯一的分支」
+——卻沒有任何程式碼拿這個清單跟上游現況比對過。**能不能失敗，是檢查存在與否的判準**；
+這個清單放了三週，實際上只是註解。
+
+修法（`collect_new_branches`／`render_branch_section`）沿用這支檔案原有的三態紀律：
+`git ls-remote --heads` 取上游實際 heads，與 baseline 的 `branches` 相減；
+`None` 代表 ls-remote 答不出來，新增 `UNDECLARED` 代表 baseline 根本沒宣告清單。
+**兩者都 fail closed**（回傳 2）——這一點跟票務軸的 `DISABLED` 不同：`DISABLED` 是上游的永久事實，
+容忍它是對的；而「沒宣告清單」正是這個軸要終結的狀態，放它過等於把原來的 bug 重演一遍。
+`ls-remote` 回傳 0 但解不出任何 `refs/heads/` 也一律當 `None`——公開 repo 不可能沒有 head，
+解不出來表示輸出格式跟這支讀取器的假設不一樣，不是「沒有新分支」。
+新增 5 支回歸測試（`tests/test_fork_upstream_check.py`）。突變驗證：把差集改成 `return []` 後
+`test_collect_new_branches_reports_branches_missing_from_the_baseline` 轉紅。
+
+**這兩條分支登記進 `branches` 的意思是「看過、已決定」，不是「採納」**：兩者對應的 advisory
+（next 16.3.4、sharp 0.35.4）本 fork 早在自己的 Dependabot PR #2（`c85b697`）修掉了，
+不需要也不應該去取上游的分支。

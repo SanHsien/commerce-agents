@@ -119,6 +119,51 @@ def upstream_slug(repo_url: str) -> str | None:
 
 
 DISABLED = "disabled"  # sentinel: the ticket type is turned off on the upstream repo itself
+UNDECLARED = "undeclared"  # sentinel: the baseline itself never declared a branch list
+
+
+def collect_new_branches(baseline: dict, repo_dir: Path) -> list[str] | None | str:
+    """Upstream branch names absent from the baseline's `branches` list.
+
+    This axis exists because the commit axis only ever looks at `baseline["branch"]`
+    (`main`). A fork that reads only that ref cannot see a branch upstream pushed
+    beside it -- a release branch, a security backport, a Dependabot branch carrying
+    a fix this fork also needs. The baseline recorded a `branches` list from the
+    start and nothing compared it to reality, so the list aged into decoration: a
+    check that cannot fail is not a check.
+
+    Returns ``None`` when `git ls-remote` could not answer (network, a repo URL git
+    will not take), and the ``UNDECLARED`` sentinel when the baseline carries no
+    usable `branches` list. Both fail closed: unlike ``DISABLED`` on the ticket
+    axes, neither is a standing fact about upstream that should be tolerated
+    forever -- one is a broken check and the other is a baseline waiting to be
+    filled in, and both are the maintainer's to fix.
+    """
+    declared = baseline.get("branches")
+    if not isinstance(declared, list) or not all(isinstance(name, str) for name in declared):
+        return UNDECLARED
+    result = subprocess.run(
+        ["git", "ls-remote", "--heads", str(baseline["repo"])],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        # Branch names are written by strangers, same argument as the ticket axis.
+        errors="replace",
+    )
+    if result.returncode != 0:
+        return None
+    seen: set[str] = set()
+    for line in result.stdout.splitlines():
+        _, _, ref = line.partition("\t")
+        if ref.startswith("refs/heads/"):
+            seen.add(ref[len("refs/heads/") :].strip())
+    if not seen:
+        # A public repo always has at least one head; an empty parse means the
+        # output shape was not what this reader assumed, not that upstream has
+        # no branches. Do not report that as "nothing new".
+        return None
+    return sorted(seen - set(declared))
 
 
 def collect_new_tickets(baseline: dict, kind: str) -> list[dict] | None | str:
@@ -240,11 +285,54 @@ def render_ticket_section(
     return lines
 
 
+def render_branch_section(
+    declared: object, branches: list[str] | None | str, decision_log: str
+) -> list[str]:
+    known = ", ".join(f"`{name}`" for name in declared) if isinstance(declared, list) else "(none)"
+    lines = ["## Upstream branches", "", f"Registered: {known}.", ""]
+    if branches is UNDECLARED:
+        lines.extend(
+            [
+                "Not checked: the baseline carries no `branches` list, so there is",
+                "nothing to compare upstream against. Declare the branches upstream",
+                "currently carries and this axis starts reporting.",
+                "",
+            ]
+        )
+        return lines
+    if branches is None:
+        lines.extend(
+            [
+                "Not checked: `git ls-remote` could not enumerate upstream branches.",
+                'Reported as such rather than as "nothing to review" -- the',
+                "difference matters.",
+                "",
+            ]
+        )
+        return lines
+    if not branches:
+        lines.extend(["No branches beyond the registered ones.", ""])
+        return lines
+    lines.extend([f"{len(branches)} new branch(es) to triage.", "", "| Branch |", "| --- |"])
+    for name in branches:
+        lines.append(f"| `{name.replace('|', chr(92) + '|')}` |")
+    lines.extend(
+        [
+            "",
+            f"Record the verdict in `{decision_log}`, then add the branch to",
+            "`branches` in `tools/upstream_baseline.json` so it is never re-triaged.",
+            "",
+        ]
+    )
+    return lines
+
+
 def render_markdown(
     baseline: dict,
     commits: list[dict],
     prs: list[dict] | None | str = None,
     issues: list[dict] | None | str = None,
+    branches: list[str] | None | str = UNDECLARED,
     error: str | None = None,
 ) -> str:
     decision_log = baseline.get("decision_log", DEFAULT_DECISION_LOG)
@@ -275,6 +363,7 @@ def render_markdown(
             "issue",
             decision_log,
         )
+        body += render_branch_section(baseline.get("branches"), branches, decision_log)
         return "\n".join(body)
 
     if not commits:
@@ -315,7 +404,8 @@ def render_json(
     commits: list[dict],
     prs: list[dict] | None | str,
     issues: list[dict] | None | str,
-    error: str | None,
+    branches: list[str] | None | str = UNDECLARED,
+    error: str | None = None,
 ) -> str:
     """A machine-readable mirror of the Markdown report.
 
@@ -327,6 +417,8 @@ def render_json(
         "error": error,
         "repo": baseline.get("repo"),
         "branch": baseline.get("branch"),
+        "registered_branches": baseline.get("branches"),
+        "new_branches": branches,
         "reviewed_through": baseline.get("reviewed_through"),
         "reviewed_date": baseline.get("reviewed_date"),
         "commits": commits,
@@ -349,7 +441,7 @@ def main() -> int:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Return non-zero when new commits, pull requests, or issues need review.",
+        help="Return non-zero when new commits, pull requests, issues, or branches need review.",
     )
     args = parser.parse_args()
 
@@ -357,6 +449,7 @@ def main() -> int:
     commits: list[dict] = []
     prs: list[dict] | None | str = None
     issues: list[dict] | None | str = None
+    branches: list[str] | None | str = UNDECLARED
     error: str | None = None
     try:
         baseline = load_baseline()
@@ -364,6 +457,7 @@ def main() -> int:
         commits = collect_new_commits(baseline, args.repo_dir, ref)
         prs = collect_new_tickets(baseline, "pr")
         issues = collect_new_tickets(baseline, "issue")
+        branches = collect_new_branches(baseline, args.repo_dir)
     except UpstreamCheckError as exc:
         error = str(exc)
         baseline = {
@@ -373,10 +467,10 @@ def main() -> int:
             "reviewed_date": "unknown",
         }
 
-    report = render_markdown(baseline, commits, prs, issues, error)
+    report = render_markdown(baseline, commits, prs, issues, branches, error)
     output = Path(args.output)
     output.write_text(report, encoding="utf-8")
-    print(render_json(baseline, commits, prs, issues, error) if args.json else report)
+    print(render_json(baseline, commits, prs, issues, branches, error) if args.json else report)
 
     if error:
         return 2
@@ -384,9 +478,21 @@ def main() -> int:
     # unparsable repo URL) -- `value is None`. DISABLED is a standing, structural
     # fact about the upstream repo (e.g. anthropics/commerce-agents has issues
     # turned off) and must not make every scheduled run fail forever.
+    # The branch axis fails closed on BOTH of its non-list states: `None` (ls-remote
+    # could not answer) and `UNDECLARED` (the baseline never declared a branch list).
+    # An undeclared list is the state this axis was added to end, so letting it pass
+    # would reproduce the original bug with extra steps.
     unavailable = [
         name for name, value in (("pull requests", prs), ("issues", issues)) if value is None
     ]
+    if branches is None:
+        unavailable.append("branches")
+    elif branches is UNDECLARED:
+        print(
+            "ERROR: tools/upstream_baseline.json declares no `branches` list, so upstream "
+            "branches are not being compared against anything."
+        )
+        return 2
     if unavailable:
         # Fail closed. A report that could not enumerate tickets must not be
         # allowed to read as a clean bill of health.
@@ -394,7 +500,8 @@ def main() -> int:
         return 2
     new_prs = prs if isinstance(prs, list) else []
     new_issues = issues if isinstance(issues, list) else []
-    if args.strict and (commits or new_prs or new_issues):
+    new_branches = branches if isinstance(branches, list) else []
+    if args.strict and (commits or new_prs or new_issues or new_branches):
         return 1
     return 0
 
