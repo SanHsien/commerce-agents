@@ -124,7 +124,13 @@ class StorefrontBackend(ABC):
         such as the platform's hosted checkout URL, or one URL per seller on a marketplace.
         The executor puts the result on the ``checkout`` card's payload after the model's
         call, so the URL is never a tool argument and never reaches the model. The default
-        returns none and the host's card leads to its own checkout."""
+        returns none and the host's card leads to its own checkout.
+
+        Raise ``Unavailable`` here when this cart cannot be paid for as it stands -- a line
+        sold out, or repriced, between staging and payment. The executor relays the message
+        with checkout wording and renders no card; it is not reported as an outage, and the
+        refusal is not worded as an add. Re-validating the cart is the backend's choice,
+        not a requirement of this contract."""
         return []
 
     async def get_account_context(self, session: ShoppingSessionContext) -> dict[str, Any] | None:

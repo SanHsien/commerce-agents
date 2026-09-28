@@ -174,6 +174,7 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "shopping-agent/core/shopping_agent/config.py",
         "shopping-agent/core/shopping_agent/prompt.py",
         "shopping-agent/core/tests/test_prompt.py",
+        "shopping-agent/core/shopping_agent/backend.py",
     }
 
 
@@ -234,6 +235,118 @@ def test_main_degrades_to_a_warning_and_exit_zero_when_the_base_commit_is_unreac
     assert "WARNING" in captured.out
 
 
+def _registry(*paths: str) -> str:
+    """A fixture registry with the real table's five columns.
+
+    These fixtures used to carry two columns, which `parse_registered_paths` accepted
+    because it only ever reads the first cell. Once `malformed_rows` enforces the shape,
+    a two-column fixture would make every `main()` test red for the wrong reason, so the
+    fixtures now look like the document they stand in for.
+    """
+    header = "| 上游檔案 | 上游原狀 | 本 fork 狀態 | 為什麼分岔 | 跟進上游時怎麼處理 |\n"
+    header += "|---|---|---|---|---|\n"
+    rows = "".join(f"| `{path}` | was | is | why | how |\n" for path in paths)
+    return header + rows
+
+
+def test_malformed_rows_names_every_row_whose_column_count_is_wrong() -> None:
+    """16 real rows were missing 為什麼分岔 and 2 were split by an unescaped `|` in a type
+    union, for weeks, because the parser only ever read the first cell."""
+    text = (
+        "| 上游檔案 | 上游原狀 | 本 fork 狀態 | 為什麼分岔 | 跟進上游時怎麼處理 |\n"
+        "|---|---|---|---|---|\n"
+        "| `ok.py` | was | is | why | how |\n"
+        "| `short.py` | was | is | how |\n"
+        "| `wide.py` | was | `X | None` | why | how |\n"
+        "| `escaped.py` | was | `X \\| None` | why | how |\n"
+    )
+
+    bad = checker.malformed_rows(text)
+
+    assert [(cols, path) for _, cols, path in bad] == [(4, "short.py"), (6, "wide.py")]
+    # The correctly escaped pipe is NOT a finding: `\|` is how GFM writes a literal pipe.
+    assert "escaped.py" not in {path for _, _, path in bad}
+
+
+def test_column_count_resolves_backslash_runs_the_way_gfm_does() -> None:
+    """GFM escapes "the punctuation after a backslash", so in `b\\\\|` the first backslash
+    escapes the second and the pipe IS a separator. A `(?<!\\\\)\\|` lookbehind got this
+    wrong in both directions -- including reading a genuinely six-column row as five,
+    which is a false pass. The trailing `|` is optional in GFM, so a row without one is
+    not malformed either.
+    """
+    bs = "\\"
+
+    assert checker._column_count(f"| `a.py` | b {bs}| c | d | e | f |") == 5  # literal pipe
+    assert checker._column_count(f"| `a.py` | b{bs}{bs}| c | d | e |") == 5  # real separator
+    assert checker._column_count(f"| `a.py` | b | c{bs}{bs}| d | e | f |") == 6  # was a false pass
+    assert checker._column_count("| `a.py` | b | c | d | e") == 5  # no trailing pipe
+    assert checker._column_count("| `a.py` | b | c | d | e |") == 5
+
+
+def test_the_real_registry_has_no_malformed_rows() -> None:
+    text = (REPO_ROOT / "docs" / "DIVERGENCE.md").read_text(encoding="utf-8")
+
+    assert checker.malformed_rows(text) == []
+
+
+def test_main_returns_one_for_a_malformed_row_even_when_every_path_matches(
+    tiny_repo: tuple[Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The path comparison passing is not enough: a row missing a column registers its
+    path just fine and would otherwise read as a clean bill of health."""
+    repo, base_sha = tiny_repo
+    monkeypatch.setattr(checker, "load_baseline", lambda: {"reviewed_through": base_sha})
+    doc = repo / "DIVERGENCE.md"
+    doc.write_text(
+        _registry("UPSTREAM.md").replace(
+            "| `UPSTREAM.md` | was | is | why | how |", "| `UPSTREAM.md` | was | is | how |"
+        )
+        + "| `KEEP.md` | was | is | why | how |\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys, "argv", ["check_divergence.py", "--repo-dir", str(repo), "--divergence-doc", str(doc)]
+    )
+
+    assert checker.main() == 1
+
+
+def test_json_output_stays_parseable_and_carries_malformed_rows(
+    tiny_repo: tuple[Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`--json` promises JSON on stdout. Printing the human-readable malformed-row block
+    after the document broke every parser, and the payload itself could not express the
+    failure at all: four empty lists and a null warning beside exit code 1 reads as a
+    clean bill of health."""
+    repo, base_sha = tiny_repo
+    monkeypatch.setattr(checker, "load_baseline", lambda: {"reviewed_through": base_sha})
+    doc = repo / "DIVERGENCE.md"
+    doc.write_text(
+        _registry("UPSTREAM.md").replace(
+            "| `UPSTREAM.md` | was | is | why | how |", "| `UPSTREAM.md` | was | is | how |"
+        )
+        + "| `KEEP.md` | was | is | why | how |\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["check_divergence.py", "--repo-dir", str(repo), "--divergence-doc", str(doc), "--json"],
+    )
+
+    exit_code = checker.main()
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    payload = json.loads(out)  # the whole of stdout, not a prefix of it
+    assert [row["path"] for row in payload["malformed_rows"]] == ["UPSTREAM.md"]
+    assert payload["malformed_rows"][0]["columns"] == 4
+    assert "Rows with the wrong number of columns" not in out
+
+
 def test_main_reports_ok_when_the_registry_matches_real_changes(
     tiny_repo: tuple[Path, str],
     monkeypatch: pytest.MonkeyPatch,
@@ -242,10 +355,7 @@ def test_main_reports_ok_when_the_registry_matches_real_changes(
     repo, base_sha = tiny_repo
     monkeypatch.setattr(checker, "load_baseline", lambda: {"reviewed_through": base_sha})
     doc = repo / "DIVERGENCE.md"
-    doc.write_text(
-        "| 上游檔案 | 說明 |\n|---|---|\n| `UPSTREAM.md` | modified |\n| `KEEP.md` | deleted |\n",
-        encoding="utf-8",
-    )
+    doc.write_text(_registry("UPSTREAM.md", "KEEP.md"), encoding="utf-8")
     monkeypatch.setattr(
         sys, "argv", ["check_divergence.py", "--repo-dir", str(repo), "--divergence-doc", str(doc)]
     )
@@ -263,9 +373,7 @@ def test_main_returns_one_when_a_real_change_is_not_registered(
     monkeypatch.setattr(checker, "load_baseline", lambda: {"reviewed_through": base_sha})
     doc = repo / "DIVERGENCE.md"
     # KEEP.md's deletion is real but not registered here: this must go red.
-    doc.write_text(
-        "| 上游檔案 | 說明 |\n|---|---|\n| `UPSTREAM.md` | modified |\n", encoding="utf-8"
-    )
+    doc.write_text(_registry("UPSTREAM.md"), encoding="utf-8")
     monkeypatch.setattr(
         sys, "argv", ["check_divergence.py", "--repo-dir", str(repo), "--divergence-doc", str(doc)]
     )
@@ -280,11 +388,7 @@ def test_main_returns_one_when_a_registered_row_was_not_actually_changed(
     monkeypatch.setattr(checker, "load_baseline", lambda: {"reviewed_through": base_sha})
     doc = repo / "DIVERGENCE.md"
     # UNTOUCHED.md is not a real change; registering it anyway must go red too.
-    doc.write_text(
-        "| 上游檔案 | 說明 |\n|---|---|\n"
-        "| `UPSTREAM.md` | modified |\n| `KEEP.md` | deleted |\n| `UNTOUCHED.md` | not real |\n",
-        encoding="utf-8",
-    )
+    doc.write_text(_registry("UPSTREAM.md", "KEEP.md", "UNTOUCHED.md"), encoding="utf-8")
     monkeypatch.setattr(
         sys, "argv", ["check_divergence.py", "--repo-dir", str(repo), "--divergence-doc", str(doc)]
     )

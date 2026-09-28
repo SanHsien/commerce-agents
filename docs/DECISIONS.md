@@ -258,7 +258,7 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 |---|---|---|---|---|
 | #5 | scaffold-commerce-agent.md 文法：「write the backend as X is written」→「the way X is written」 | open, `b808b55` | 已採納（本輪） | 原句 `write the backend as MockRetail... is written` 語意不通順（`as X is written` 不成立的比較結構）；新句可讀。本 fork 該行現狀與上游基準相同（`sed -n '179p'` 確認），未分岔。 |
 | #6 | docs/backends.md 文法：刪掉贅字 `stays` | open, `f1043f4` | 拒絕（審查誤判） | 原句「prices stays this way」主謂不一致且贅字；新句「prices this way」正確。本 fork 該行未分岔（現狀與上游基準相同）。 |
-| #7 | Add WebMCP support | open, `5649221` | 觀察／需獨立評估 | 跨 4 個垂直（retail/travel/telecom/entertainment）× storefront/merchant 共 26 個檔案、新增 `web-shared` 的 `useWebMcpTools`/`createStorefrontWebMcpTools`/`createMerchantWebMcpTools`，是全新能力（瀏覽器端暴露唯讀 MCP 工具），不是缺陷修正。雖然標了 `"risk":"read-only"`／`"untrustedContent":true` 顯示作者有意識到信任邊界，但範圍與安全影響（瀏覽器暴露的工具端點如何綁定 session、是否可被同頁面其他腳本呼叫）需要獨立、有邊界的審查，不適合塞進本輪 PR 分類判決。 |
+| #7 | Add WebMCP support | open, `5649221` | 觀察（2026-09-29 安全審查已定案：**暫不採納**，附三項重啟條件，見本檔 2026-09-29 段落；`monitored` 已釘此 head） | 跨 4 個垂直（retail/travel/telecom/entertainment）× storefront/merchant 共 26 個檔案、新增 `web-shared` 的 `useWebMcpTools`/`createStorefrontWebMcpTools`/`createMerchantWebMcpTools`，是全新能力（瀏覽器端暴露唯讀 MCP 工具），不是缺陷修正。雖然標了 `"risk":"read-only"`／`"untrustedContent":true` 顯示作者有意識到信任邊界，但範圍與安全影響（瀏覽器暴露的工具端點如何綁定 session、是否可被同頁面其他腳本呼叫）需要獨立、有邊界的審查，不適合塞進本輪 PR 分類判決。 |
 | #8 | shopping executor：cart quantity 驗成 argument error 而非 outage | open, `0a11006` | **已採納（`4dc206d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/executor.py:165,175` 現狀是 `int(tool_input.get("quantity") or 1)`，`quantity="abc"` 觸發原生 `ValueError`（不是 `commerce_common.execution.InvalidArguments`），落進 `BaseToolExecutor.execute` 的 `except Exception` 泛用分支（`commerce-common/commerce_common/execution.py:219-223`），回報成「unavailable」而非具名的 argument 錯誤。PR 改用既有的 `parse_argument()`（同檔案已用於 `SearchFilters`，`executor.py:135`），做法與現有慣例一致。 |
 | #9 | shopping cards：model-authored `reason` 文字進 host 前先過 fence sanitizer | open, `61bad1c` | **已採納（`489286d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/enrichment.py:92,213` 現狀直接把 `pick.reason`／`pick["reason"]`（模型產生的文字）塞進 UI payload，未過 `STOREFRONT_FENCE.sanitize_text`。`commerce-common/commerce_common/fencing.py` 已有 `Fence.sanitize_text`，本專案設計規則（`AGENTS.md`「第三方內容一律圈在 fence 裡」）與既有的 ReDoS 修補案例（`docs/DIVERGENCE.md` 的 `orders.tsx` 一列）都是同一類「model/third-party 文字進 host 渲染層前要清洗」的原則，這裡是一個遺漏點：模型可在 `reason` 裡塞入 fence 標記或不可見字元。 |
 | #10 | merchant guardrails：價格超過兩位小數視為違規 | open, `f184ed9` | **已採納（`4dc206d`）** | 已重現缺陷：`merchant-agent/core/merchant_agent/changes.py` 的 `check_guardrails`（約 70 行起）目前沒有小數位檢查，`79.795` 這類價格可以通過寫入閘門。與既有的 `check_pin_bounds.py`／guardrails 精神一致（寫入操作要在程式碼裡有上限與檢查）。 |
@@ -271,8 +271,8 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 | #17 | ticketing：`SoldOutError` 應是契約的 `Unavailable` | open, `035ca1b` | **已採納（`4dc206d`）** | 已重現：`examples/entertainment/api/ticketing.py:29` 現狀 `class SoldOutError(TicketingError)`，只繼承 `ValueError`，不是 `shopping_agent.backend.Unavailable`；售完因此被 executor 的 `domain_error()` 判斷為「不是 Unavailable」而走泛用 outage 分支，而非具名的售罄訊息。 |
 | #18 | `MerchantBackend` 文件字串：明講「changes 只作用在 session 的 merchant」 | open, `6639dfc` | **已採納（`489286d`）** | 純 docstring 補充（`merchant-agent/core/merchant_agent/backend.py:39-45` 現狀沒有這句），是 #13/#25 所修正之跨商家隔離缺陷的抽象基底類別契約說明；若採納 #25，#18 應一併採納以讓文件與實作一致。 |
 | #19 | 提案：backend 一致性測試套件 | open (draft), `e49a738` | 觀察 | 純文件提案（新增 `docs/proposals/backend-conformance-suite.md`），作者自陳「code follows once the shape is agreed」，尚無程式碼可審。 |
-| #20 | 提案：checkout 二次驗證與 handoff 拒絕 | open (draft), `b3cfe06` | 觀察 | 純文件提案。其中一句技術主張（「`Unavailable` 不是 `run_presentation` 會 relay 的 `ValueError`，所以會回報成 outage」）經查證**與本 repo 現狀不符**：`commerce-common/commerce_common/presentation.py:120-144` 的 `run_presentation` 確實只窄窄地接 `PresentationRefused`/`ValueError`，但呼叫鏈外層的 `BaseToolExecutor.execute`（`commerce-common/commerce_common/execution.py:214-223`）有更寬的 `except Exception` 分支且會先呼叫 `domain_error()`——`shopping-agent/core/shopping_agent/executor.py:106-113` 的 `domain_error()` 已經會正確辨識 `Unavailable` 並回覆具名訊息。也就是說，若 `checkout_handoff` 真的丟出 `Unavailable`，今天的行為就已經是「具名拒絕」而不是「outage」。這不影響提案其餘部分（re-validate at checkout、price staleness）的價值，但引用的既有缺陷描述不準確，列為觀察並註記此點，供日後評估提案時用。 |
-| #21 | 提案：ledger claim 與跨程序/當機的 idempotent apply | open (draft), `7adc548` | 觀察 | 純文件提案，無程式碼。 |
+| #20 | 提案：checkout 二次驗證與 handoff 拒絕 | open (draft), `8b7f9b9`（2026-09-29 更新：上游把 head 從 `b3cfe06` 推進到此，本 repo 當時沒察覺——這就是 `monitored` 軸存在的理由） | 觀察（2026-09-29 重讀：**第 2 項已採納**、第 1／3 項不跟，見本檔 2026-09-29 段落） | 純文件提案。其中一句技術主張（「`Unavailable` 不是 `run_presentation` 會 relay 的 `ValueError`，所以會回報成 outage」）經查證**與本 repo 現狀不符**：`commerce-common/commerce_common/presentation.py:120-144` 的 `run_presentation` 確實只窄窄地接 `PresentationRefused`/`ValueError`，但呼叫鏈外層的 `BaseToolExecutor.execute`（`commerce-common/commerce_common/execution.py:214-223`）有更寬的 `except Exception` 分支且會先呼叫 `domain_error()`——`shopping-agent/core/shopping_agent/executor.py:106-113` 的 `domain_error()` 已經會正確辨識 `Unavailable` 並回覆具名訊息。也就是說，若 `checkout_handoff` 真的丟出 `Unavailable`，今天的行為就已經是「具名拒絕」而不是「outage」。這不影響提案其餘部分（re-validate at checkout、price staleness）的價值，但引用的既有缺陷描述不準確，列為觀察並註記此點，供日後評估提案時用。 |
+| #21 | 提案：ledger claim 與跨程序/當機的 idempotent apply | open (draft), `7adc54c`（2026-09-29 更正：原記 `7adc548` 是抄寫錯誤，上游沒有這個 commit，這個 pin 從來對不上任何東西） | 觀察 | 純文件提案，無程式碼。 |
 | #22 | 提案：shopper 端訂單動作（取消/退貨/回報問題） | open (draft), `ddf43ac` | 觀察 | 純文件提案，無程式碼。 |
 | #23 | 提案：staged change 衝突標記與 apply 時的過時檢查 | open (draft), `2860826` | 觀察 | 純文件提案，無程式碼。 |
 | #24 | 提案：undo 與排程 apply | open (draft), `14b569a` | 觀察 | 純文件提案，無程式碼。 |
@@ -558,3 +558,160 @@ fence 提示，不觸發 `system.md` 重新推導。分岔登記在 [`DIVERGENCE
 **這兩條分支登記進 `branches` 的意思是「看過、已決定」，不是「採納」**：兩者對應的 advisory
 （next 16.3.4、sharp 0.35.4）本 fork 早在自己的 Dependabot PR #2（`c85b697`）修掉了，
 不需要也不應該去取上游的分支。
+
+## 2026-09-29：#7 WebMCP 安全審查定案、#20 重讀（上游採用了本 fork 的訂正）、條件式判決改為機器追蹤
+
+### 先講制度缺口，因為它是這輪其他三件事被發現的原因
+
+`#7` 與 `#19`–`#24` 的判決都是**條件式**的——「暫不採納，等 X 成立再評估」、「純提案、還沒有程式碼」。
+這種判決只在「當時讀的那份 diff」成立。但 `reviewed_pr_through` 一旦推過那些編號，票務軸就只報
+**大於**水位的項目，於是條件式判決**在沒有人決定的情況下變成永久判決**。實際後果：
+
+- **`#20` 的上游 head 從 `b3cfe06` 動到 `8b7f9b9`**，本 repo 完全沒有察覺。`DECISIONS.md` 早就
+  用文字寫了「改動 head SHA 視為新事件需要重新讀 diff」這條規則——**沒有任何程式碼執行它**。
+- **`#21` 記的 `7adc548` 是抄寫錯誤**：上游沒有這個 commit（`gh api .../commits/7adc548` 回 422），
+  真正的 head 是 `7adc54c`。也就是說這個 pin 從寫下的那天起就對不上任何東西，而且**沒有任何東西會發現**。
+
+修法：baseline 新增 `monitored` 清單，逐項釘 `item`／`head`／`state`；`collect_stale_monitored`
+比對上游現況，head 或 state 任一漂移就報出並讓 `--strict` 非 0。設計上刻意讓三種情況都**不能靜默通過**：
+pin 太短或缺漏（例如 `7adc548` 這種對不上的）算漂移；上游不再列出該項算漂移（不是「沒變」）；
+baseline 沒宣告清單或 `gh` 答不出來一律 fail closed。**清單的形狀在打網路呼叫之前就先驗**，
+否則 `gh` 掛掉會把「baseline 寫壞了」這個確定的缺陷蓋成不確定的查不到。
+新增 8 支回歸測試；突變驗證：把漂移判斷改成 `if False` 後 3 支測試轉紅。
+這與 2026-09-28 的分支軸是同一個病灶，見 `docs/DIVERGENCE.md` 與上一條記錄。
+
+### #7 `Add WebMCP support`（head `5649221`，非 draft，26 檔 +279／−20）→ **暫不採納**，附重啟條件
+
+先說結論的性質：**這不是「上游寫得差」**。範圍也比編號嚇人的「26 檔」小得多——4 個垂直 × storefront／
+merchant 的接線幾乎一模一樣，真正要審的只有 `examples/web-shared/webmcp.ts`（208 行）。
+
+**安全面實際查下來是穩的，這部分先講清楚，避免日後把它誤記成有漏洞**：
+
+- 它是把工具**註冊給瀏覽器自己的 model-context 介面**，不是開一個網路端點。沒有新增任何
+  外部可達的攻擊面；`execute` 閉包在頁面內以使用者既有 session 執行，權限與該頁本來的 JS 相同。
+- 5～7 個工具全部走 `lib/api.ts` 既有的 GET 包裝，沒有寫入路徑，`readOnlyHint: true` **屬實**。
+- `untrustedContentHint: true` 設得對——商品／listing 文字是商家撰寫的。
+- 輸入驗證是真的防守而非裝飾：`strictObject` 在 JS 裡拒絕未知欄位（不依賴平台去執行
+  `additionalProperties: false`）、字串上限 120、`limit` 以 `Number.Integer` 檢查並夾在 1–20、
+  `search_catalog` 的輸出是**欄位白名單投影**（只吐 6 個欄位），不會把商品物件其餘欄位一起洩出去。
+
+**不採納的理由是三個實際缺陷加上一個時機問題**：
+
+1. **拼法的優先序是反的。** 程式寫 `navigator.modelContext || document.modelContext`，**先取
+   `navigator`**。但 Chrome 官方 imperative API 文件（`developer.chrome.com/docs/ai/webmcp/imperative-api`）
+   全篇只用 `document.modelContext.registerTool()`，完全沒有提到 `navigator.modelContext`——
+   已實際抓下該頁確認。規格把 getter 從 Navigator 移到 Document 的理由正是**工具屬於某一個頁面、
+   不屬於瀏覽器**，也就是這件事的信任邊界本身。所以它真的生效的那天，走的是被平台放棄的那條路。
+   （網路上另有「`navigator.modelContext` 在 Chromium 150 標為 deprecated」的說法，只見於部落格、
+   Chrome 官方文件沒寫，**這裡不當成事實引用**，只記錄官方文件現在寫的是 `document`。）
+2. **只註冊、不註銷。** `ModelContext` 介面只宣告 `registerTool`，沒有任何移除路徑。`get_orders`
+   的描述是「the signed-in shopper's orders」，其閉包綁著註冊當時那個 session 的 `fetchOrders`。
+   登出、切換 profile（telecom storefront 就有 `onSwitchProfile`，而 `useSession(api, { profile: profile.id })`
+   是綁 profile 的）或元件卸載之後，工具都還在。**session 範圍的讀取活得比 session 還久**，
+   這是唯一一個真正有安全意涵的缺陷，而且它是「上線前要修掉」而不是「上線後再說」的那一類。
+   另外 `tools` 放在 `useEffect` 的依賴陣列裡，呼叫端沒有 memo 化就會每次 render 重複註冊。
+3. **e2e 期望是裝飾。** 8 個 `webmcp.e2e.json` 寫了 `expectedAnnotations`、`expectedOutputSubset`，
+   甚至具體到 `{"total":1}`——**這個 PR 沒有附任何 runner**，沒有一行程式碼讀它們。再加上
+   `useWebMcpTools` 裡的 `.catch(() => {})` 把註冊失敗整個吞掉，「有沒有註冊成功」無從得知。
+   這正是本 session 花力氣從這個 repo 清掉的那一類東西，不該反手再引進 9 個。
+4. **時機**：今天在本 fork demo 會跑的每一個瀏覽器上，`modelContext` 都是 undefined，整段 279 行
+   是**惰性程式碼**；它會在未來某個瀏覽器普及的時點自己活起來，而那個時點不會有人回頭重審。
+   在「開始生效」與「重新審查」之間留一個 session 範圍的讀取介面，方向不對。
+
+**重啟條件（三項全滿足才重新評估，屆時以 `monitored` 的 head pin 為準重讀 diff）**：
+① 上游把偵測改為以 `document.modelContext` 為主（或本 fork 移植時自行改正並登記分岔）；
+② 有明確的註銷／失效路徑，能在登出與切換 profile 時撤掉已註冊工具；
+③ 那 8 個 `webmcp.e2e.json` 有真的會執行、會失敗的 runner，且註冊失敗不再被靜默吞掉。
+
+### #20 重讀（head `b3cfe06` → `8b7f9b9`）：上游採納了本 fork 的訂正，並反過來指出一個我們漏掉的缺陷
+
+新 head 只改一個檔（`docs/proposals/checkout-revalidation.md`），加了一段 `## Correction`，
+**明文寫著是本 fork 的 review 抓到的**：「an earlier version of this note said the executor reports a
+handoff `Unavailable` as an outage. It does not… The review in SanHsien's fork (`docs/DECISIONS.md`
+there) caught it.」我們 2026-09-11 那筆查證因此外溢到上游，這是可驗證的結果。
+
+但上游把它修得比我們更準，而**修正後的版本指出一個我們當時沒看到的真缺陷**：`Unavailable` 確實
+不會被報成 outage，可是 `domain_error` 用的是 `sold_out_text`——「**Nothing was added**: {detail}。
+…and **add** that only once they choose it.」這段文字是為 `add_to_cart` 寫的。結帳被拒時根本沒有
+在「加入」任何東西，而且這段話會**叫模型在結帳失敗之後去做一次 add**。已在本 repo 實證：
+`enrich_checkout`（`shopping-agent/core/shopping_agent/enrichment.py`）呼叫 `checkout_handoff` 時
+沒有攔 `Unavailable`，一路落到執行器的 `domain_error`。
+
+**採納提案的第 2 項**（`enrich_checkout` 攔 `Unavailable` 改拋 `PresentationRefused`，用結帳的措辭
+轉述後端訊息，訊息本身照既有慣例走 `STOREFRONT_FENCE` 消毒並截斷）。新測試
+`test_checkout_refusal_is_worded_for_a_checkout_not_an_add`。突變驗證把攔截的例外型別換成一個
+永不拋出的私有類別後測試轉紅，失敗輸出就是缺陷本身：
+`Nothing was added: Cast-iron stove sold out; ... and add that only once they choose it.`
+
+**不採納第 1 項與第 3 項**：第 1 項是改 `docs/backends.md` 的契約文字，要求所有後端在回傳 URL
+前重新驗證每一行——那是對下游實作者的產品層要求，不是本 fork 能單方面宣告的；第 3 項（host 端
+比對金流實收金額與完成時的購物車總額，不符就留待人工）是新的對帳能力，屬於產品範圍，
+且本 repo 的 demo host 沒有金流。兩項都維持觀察，`#20` 的 pin 已更新到 `8b7f9b9`。
+
+### 分岔登記表本身壞了三分之一，而檢查程式只讀第一欄所以從沒發現
+
+補 #20 那兩列的時候撞到的：`docs/DIVERGENCE.md` 56 列裡有 **18 列欄數是錯的**——16 列少了
+**「為什麼分岔」**這一欄，另外 2 列被型別聯集裡沒轉義的 `|`（`SessionStore[X] | None`）切開。
+
+`check_divergence.py` 的 `parse_registered_paths` **只讀第一個 cell**（路徑），所以一列就算缺一整欄，
+路徑照樣登記、檢查照樣綠。這不是排版小事：少一欄的列，後面每一欄都往左移一格，於是
+**表頭自己稱為「這張表的重點」的最後一欄（跟進上游時怎麼處理）渲染出來是空的**，本來該在那裡的
+可執行判準跑到「為什麼分岔」底下。日後同步上游時照著讀的人，會在該看到判準的位置看到空白。
+
+修法：`malformed_rows()` 逐列數欄，欄數不是 5 就報出行號、實際欄數與路徑，並讓 `main()` 非 0。
+數欄時**用 GFM 的規則切**（`(?<!\)\|`，不切被 `\|` 轉義的管線），否則第 33 列那個本來就正確轉義的
+`chmod(... \| S_IWRITE)` 會被誤報——我第一次用天真的 `split("|")` 數就誤報了它，實際查證後才排除。
+
+16 列的「為什麼分岔」是逐列讀該列的上游原狀與 fork 狀態後補寫的，不是套模板：例如非法 quantity
+那列寫的是「泛用 outage 會叫模型請顧客稍後再試，但參數錯誤該讓模型當場改正重送，兩者要模型做的事
+相反」；售完住宿那列寫的是「顧客要一路走到結帳才發現訂不到」。2 列轉義修好。
+
+另外把 `tests/test_fork_divergence.py` 三個 `main()` 測試的假資料從兩欄改成五欄——原本兩欄能過，
+正是因為被測的解析器只讀第一欄；假資料要長得像它代表的那份文件，否則新檢查會讓這些測試為了
+錯誤的理由變紅。新增 3 支測試（含一支直接斷言真實的 `docs/DIVERGENCE.md` 零列畸形）。
+突變驗證：把欄數比較改成 `if False` 後 2 支測試轉紅。
+
+**這是本 session 同一個病灶的第五例**（前四例：依賴新鮮度的三段式 action 路徑、bundle tag 假綠、
+分支清單沒人比對，加上艦隊範本的兩段式 tag 正則）。共通形狀始終一樣：**解析不到或沒人比對就當通過**。
+
+### 同一輪的 fresh review 抓到兩個必修，都在我新寫的檢查程式裡
+
+這批改動走了 audit 路線（自己實作驗證後交一個 fresh context 的 reviewer 看累積 diff）。
+reviewer 判 `fix-first`，兩項必修**都不在移植的產品碼上，而在我這輪新增的檢查程式**——正好是
+本輪一直在清的那個病灶，寫新檢查的人自己也會犯：
+
+1. **`check_divergence.py --json` 在新的失敗模式下吐出「JSON ＋ 非 JSON 尾巴」**，而且 payload
+   裡四個清單全空、`warning: null`，**讀起來是一份乾淨的健康報告**，旁邊卻是 exit code 1。
+   原因：`malformed` 沒進 `render_json`，人可讀的那段又印在 `if args.json` 之外。
+   已修：payload 加 `malformed_rows`，人可讀區塊移進 `else`，補一支斷言「stdout 整體仍可
+   `json.loads`」的測試。
+2. **`(?<!\)\|` 不是 GFM 的規則，而我把它寫成是。** GFM 是「反斜線轉義後面那個標點」，所以
+   `b\|` 裡第一個反斜線吃掉第二個、**那個 `|` 是真正的分隔符**。lookbehind 兩個方向都錯。
+   我實測確認 reviewer 的說法，而且其中一個方向是**假綠**：`| a | b | c\| d | e | f |` 真實是
+   6 欄（畸形），舊實作報 5（通過）。已修成先 `re.sub(r"\.", "", ...)` 解掉所有轉義對再數，
+   並一併處理 GFM「行尾 `|` 可省略」的情形（舊實作會把合法的省略列誤報成少一欄）。
+   新增 `_column_count()` 與一支釘住四種反斜線／行尾情形的測試。
+
+reviewer 另外六項建議也都採納了：`.isdigit()` 對上標數字為真而 `int()` 不吃（改
+`isascii() and isdigit()`，否則裸 traceback）；`"monitored": []` 原本會印「每個釘住的項目都還在
+原位」——一個都沒釘卻說全部都在，已改成明說「這條軸現在沒有在追蹤任何東西」；把
+`test_baseline_pins_every_conditional_verdict_recorded_in_decisions` 從寫死的 `{7,19..24}` 改成
+**從 `docs/DECISIONS.md` 判決欄含「觀察」的列推導**（寫死的集合擋得住項目被刪，擋不住未來新增一筆
+觀察判決卻忘了釘，那正是同一個病灶上移一層）；`--strict` 的 help 與模組 docstring 補上新增的兩軸；
+PR 表第 261／274 列的判決欄補上指回本段的字（`render_monitored_section` 印給維護者的指示就是
+「去 `docs/DECISIONS.md` 更新判決」，那張表就是他會看的地方，不能還停在舊結論）。
+
+**第八項建議促成了一個實質改動**：reviewer 指出 `Unavailable` 的 docstring 只寫「Raised by
+`add_to_cart`」、`checkout_handoff` 的 docstring 完全沒提可以在此拋出、repo 內四個垂直也沒有任何
+實作覆寫 `checkout_handoff`——也就是說**照契約寫的下游實作者永遠走不到那段新攔截，只有測試碰得到**。
+那就等於我一邊清掉惰性程式碼、一邊引進一段實務上到不了的攔截。處理方式是補
+`checkout_handoff` docstring 的一段**描述性**說明（後端「可以」在此拋 `Unavailable`，executor 會用
+結帳措辭轉述、不渲染卡片；是否重新驗證購物車是後端自己的選擇），讓攔截真的可達，並登記第 57 列分岔。
+刻意不寫成規範性措辭——「要求所有後端回傳 URL 前重新驗證每一行」是 #20 的第 1 項，本 fork 不跟。
+
+reviewer 獨立驗過而我沒有重複的幾點，記下來免得日後重查：攔截範圍收得對（`get_cart` 與
+`cart_payload` 都在 `try` 之外，`try` 內只有 `checkout_handoff` 一行）；`Unavailable` 繼承 `Exception`
+不是 `ValueError`，所以 `presentation.py` 的 `except ValueError` 接不到它，確實會落到
+`execution.py` 的 ladder 再進 `domain_error`；`NotOffered` 不跟著攔是對的（它的措辭在結帳情境不誤導）；
+`agent_sdk.ground` 的 `dispatch` 只會跑有 `prefetch_intro` 的 `get_orders`／`get_product_details`，
+不會跑 `checkout`，所以沒有第二條路徑被改到。

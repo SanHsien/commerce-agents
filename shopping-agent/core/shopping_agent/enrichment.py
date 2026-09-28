@@ -19,6 +19,7 @@ from commerce_common.presentation import (
     PresentSuggestionsPayload,
 )
 
+from .backend import Unavailable
 from .fencing import STOREFRONT_FENCE
 from .gates import PROVENANCE_GATE
 from .serialization import cart_payload
@@ -175,7 +176,20 @@ async def enrich_checkout(payload: CheckoutPayload, context: EnrichmentContext) 
         raise PresentationRefused("The cart is empty — nothing to check out.")
     enriched = payload.model_dump(exclude_none=True)
     enriched["cart"] = cart_payload(cart)
-    handoffs = await context.backend.checkout_handoff(context.session, cart)
+    try:
+        handoffs = await context.backend.checkout_handoff(context.session, cart)
+    except Unavailable as refusal:
+        # Refuse here rather than letting this reach the executor's `domain_error`, whose
+        # `Unavailable` wording is written for an add ("Nothing was added: ... add that
+        # only once they choose it"). On a checkout nothing was being added, and that
+        # text tells the model to perform an add in answer to a failed checkout. The
+        # backend's own message is the accurate part, so it is relayed with checkout
+        # wording; `STOREFRONT_FENCE` sanitizes it because it is backend text.
+        detail = STOREFRONT_FENCE.sanitize_text(str(refusal), 200) or "it is unavailable"
+        raise PresentationRefused(
+            f"The checkout was refused: {detail}. Tell the customer what the message "
+            "names, and stage a checkout again only after the cart accounts for it."
+        ) from refusal
     if handoffs:
         enriched["handoffs"] = [h.model_dump(exclude_none=True) for h in handoffs]
     return enriched

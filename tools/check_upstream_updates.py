@@ -1,9 +1,18 @@
-"""Report upstream commits, pull requests, and issues this fork has not reviewed.
+"""Report upstream work this fork has not reviewed: commits, pull requests, issues,
+branches, and monitored items whose conditional verdict no longer matches upstream.
 
 Commits are only one of the places upstream work shows up. A pull request can sit
 open for months with a fix in it, and an issue can describe a defect this fork also
 has -- neither reaches the commit log until somebody merges it. Each axis therefore
 carries its own watermark, and the report only lists what is above it.
+
+Two axes are not watermarked, because a watermark is the wrong shape for them. The
+branch axis compares upstream's actual heads against the baseline's `branches` list:
+the commit axis only ever fetches one ref, so a branch pushed beside it is otherwise
+invisible. The monitored axis pins each conditional verdict ("reject for now, revisit
+when X") to the head and state it was judged at: once `reviewed_pr_through` passes
+such an item the ticket axis never mentions it again, so without this the verdict
+silently becomes permanent. Both fail closed when they cannot answer.
 
 Tickets are queried with ``--state all`` on purpose: an item opened and closed
 between two scheduled runs is still an item this fork never triaged, and a pull
@@ -229,6 +238,155 @@ def collect_new_tickets(baseline: dict, kind: str) -> list[dict] | None | str:
     )
 
 
+def collect_stale_monitored(baseline: dict) -> list[dict] | None | str:
+    """Monitored upstream items whose head SHA or open/draft state has moved.
+
+    Some verdicts are conditional rather than final: "reject for now, revisit when X",
+    or "design proposal, no code yet". Those were reached by reading ONE diff, so they
+    only hold while upstream's head is the one that was read. Advancing
+    `reviewed_pr_through` past such an item silences it forever -- the ticket axis only
+    reports numbers ABOVE the watermark -- so the conditional verdict quietly becomes
+    permanent. That is how #20 was updated upstream (`b3cfe06` -> `8b7f9b9`, adding a
+    correction this fork's review prompted) without anything here noticing.
+
+    Each entry in the baseline's `monitored` list pins `item`, `head` and `state`
+    ("open", "draft" or "closed"). A drift in either field is reported so the verdict
+    gets re-read. Returns ``UNDECLARED`` when the baseline carries no usable list and
+    ``None`` when `gh` could not answer -- both fail closed, for the same reason the
+    branch axis does.
+    """
+    declared = baseline.get("monitored")
+    if not isinstance(declared, list):
+        return UNDECLARED
+    # Validate the declaration BEFORE spending a network call: a malformed list is a
+    # baseline defect that is detectable without `gh`, and checking it first keeps the
+    # verdict deterministic instead of depending on whether `gh` happened to answer.
+    for entry in declared:
+        if not isinstance(entry, dict) or not str(entry.get("item", "")).startswith("pr#"):
+            return UNDECLARED
+        # `str.isdigit()` alone is True for superscripts ("pr#²"), which `int()` then
+        # refuses -- a bare traceback instead of a verdict. `isascii()` closes that.
+        number_text = str(entry["item"])[3:]
+        if not (number_text.isascii() and number_text.isdigit()):
+            return UNDECLARED
+    slug = upstream_slug(str(baseline["repo"]))
+    if not slug:
+        return None
+    result = subprocess.run(
+        [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            slug,
+            "--state",
+            "all",
+            "--limit",
+            "1000",
+            "--json",
+            "number,state,isDraft,headRefOid",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        items = json.loads(result.stdout)
+    except ValueError:
+        return None
+    live = {int(item["number"]): item for item in items}
+    stale: list[dict] = []
+    for entry in declared:
+        number = int(str(entry["item"])[3:])
+        current = live.get(number)
+        if current is None:
+            # Recorded as monitored but upstream does not list it: not "unchanged".
+            stale.append({"item": entry["item"], "was": entry.get("head", "?"), "now": "not found"})
+            continue
+        now_state = (
+            "closed" if current["state"] != "OPEN" else ("draft" if current["isDraft"] else "open")
+        )
+        head = str(current["headRefOid"])
+        pinned_head = str(entry.get("head", ""))
+        # Compare on the shorter of the two so a 7-char record matches a full SHA -- but
+        # an empty or over-long pin is drift, not a match.
+        length = min(len(pinned_head), len(head))
+        head_moved = not pinned_head or length < 7 or pinned_head[:length] != head[:length]
+        if head_moved or now_state != entry.get("state"):
+            stale.append(
+                {
+                    "item": entry["item"],
+                    "was": f"{pinned_head or '(none)'} / {entry.get('state', '(none)')}",
+                    "now": f"{head[:7]} / {now_state}",
+                }
+            )
+    return stale
+
+
+def render_monitored_section(
+    declared: object, stale: list[dict] | None | str, decision_log: str
+) -> list[str]:
+    count = len(declared) if isinstance(declared, list) else 0
+    lines = ["## Monitored upstream items (conditional verdicts)", "", f"Pinned: {count}.", ""]
+    if isinstance(stale, list) and count == 0:
+        # "Every pinned item is still where it was" is true but useless of an empty list,
+        # and reads as an all-clear for an axis that is tracking nothing. Say what is
+        # actually the case instead.
+        lines.extend(
+            [
+                "Nothing is pinned, so this axis is tracking nothing. Any conditional",
+                f'verdict in `{decision_log}` ("revisit when X", "proposal, no code yet")',
+                "belongs here, pinned to the head and state it was judged at.",
+                "",
+            ]
+        )
+        return lines
+    if stale is UNDECLARED:
+        lines.extend(
+            [
+                "Not checked: the baseline carries no usable `monitored` list, so items",
+                "with a conditional verdict are not pinned to the diff they were judged",
+                "against. Declare them and this axis starts reporting.",
+                "",
+            ]
+        )
+        return lines
+    if stale is None:
+        lines.extend(
+            [
+                "Not checked: `gh` could not enumerate upstream pull requests. Reported",
+                'as such rather than as "nothing moved" -- the difference matters.',
+                "",
+            ]
+        )
+        return lines
+    if not stale:
+        lines.extend(["Every pinned item is still at the head and state it was judged at.", ""])
+        return lines
+    lines.extend(
+        [
+            f"{len(stale)} pinned item(s) moved since the verdict was recorded.",
+            "",
+            "| Item | Judged at | Now |",
+            "| --- | --- | --- |",
+        ]
+    )
+    for entry in stale:
+        lines.append(f"| {entry['item']} | `{entry['was']}` | `{entry['now']}` |")
+    lines.extend(
+        [
+            "",
+            f"Re-read the diff, update the verdict in `{decision_log}`, then re-pin",
+            "`head`/`state` in `monitored` in `tools/upstream_baseline.json`.",
+            "",
+        ]
+    )
+    return lines
+
+
 def render_ticket_section(
     title: str,
     watermark: int,
@@ -333,6 +491,7 @@ def render_markdown(
     prs: list[dict] | None | str = None,
     issues: list[dict] | None | str = None,
     branches: list[str] | None | str = UNDECLARED,
+    monitored: list[dict] | None | str = UNDECLARED,
     error: str | None = None,
 ) -> str:
     decision_log = baseline.get("decision_log", DEFAULT_DECISION_LOG)
@@ -364,6 +523,7 @@ def render_markdown(
             decision_log,
         )
         body += render_branch_section(baseline.get("branches"), branches, decision_log)
+        body += render_monitored_section(baseline.get("monitored"), monitored, decision_log)
         return "\n".join(body)
 
     if not commits:
@@ -405,6 +565,7 @@ def render_json(
     prs: list[dict] | None | str,
     issues: list[dict] | None | str,
     branches: list[str] | None | str = UNDECLARED,
+    monitored: list[dict] | None | str = UNDECLARED,
     error: str | None = None,
 ) -> str:
     """A machine-readable mirror of the Markdown report.
@@ -419,6 +580,8 @@ def render_json(
         "branch": baseline.get("branch"),
         "registered_branches": baseline.get("branches"),
         "new_branches": branches,
+        "monitored": baseline.get("monitored"),
+        "stale_monitored": monitored,
         "reviewed_through": baseline.get("reviewed_through"),
         "reviewed_date": baseline.get("reviewed_date"),
         "commits": commits,
@@ -441,7 +604,8 @@ def main() -> int:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Return non-zero when new commits, pull requests, issues, or branches need review.",
+        help="Return non-zero when new commits, pull requests, issues or branches need "
+        "review, or when a monitored item has moved off the head its verdict was judged at.",
     )
     args = parser.parse_args()
 
@@ -450,6 +614,7 @@ def main() -> int:
     prs: list[dict] | None | str = None
     issues: list[dict] | None | str = None
     branches: list[str] | None | str = UNDECLARED
+    monitored: list[dict] | None | str = UNDECLARED
     error: str | None = None
     try:
         baseline = load_baseline()
@@ -458,6 +623,7 @@ def main() -> int:
         prs = collect_new_tickets(baseline, "pr")
         issues = collect_new_tickets(baseline, "issue")
         branches = collect_new_branches(baseline, args.repo_dir)
+        monitored = collect_stale_monitored(baseline)
     except UpstreamCheckError as exc:
         error = str(exc)
         baseline = {
@@ -467,10 +633,11 @@ def main() -> int:
             "reviewed_date": "unknown",
         }
 
-    report = render_markdown(baseline, commits, prs, issues, branches, error)
+    report = render_markdown(baseline, commits, prs, issues, branches, monitored, error)
     output = Path(args.output)
     output.write_text(report, encoding="utf-8")
-    print(render_json(baseline, commits, prs, issues, branches, error) if args.json else report)
+    payload = render_json(baseline, commits, prs, issues, branches, monitored, error)
+    print(payload if args.json else report)
 
     if error:
         return 2
@@ -493,6 +660,14 @@ def main() -> int:
             "branches are not being compared against anything."
         )
         return 2
+    if monitored is None:
+        unavailable.append("monitored items")
+    elif monitored is UNDECLARED:
+        print(
+            "ERROR: tools/upstream_baseline.json declares no usable `monitored` list, so "
+            "conditional verdicts are not pinned to the diff they were judged against."
+        )
+        return 2
     if unavailable:
         # Fail closed. A report that could not enumerate tickets must not be
         # allowed to read as a clean bill of health.
@@ -501,7 +676,8 @@ def main() -> int:
     new_prs = prs if isinstance(prs, list) else []
     new_issues = issues if isinstance(issues, list) else []
     new_branches = branches if isinstance(branches, list) else []
-    if args.strict and (commits or new_prs or new_issues or new_branches):
+    stale_monitored = monitored if isinstance(monitored, list) else []
+    if args.strict and (commits or new_prs or new_issues or new_branches or stale_monitored):
         return 1
     return 0
 

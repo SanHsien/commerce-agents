@@ -150,6 +150,50 @@ def compute_divergent_files(pairs: list[tuple[str, str]], owned: set[str]) -> se
     return divergent
 
 
+REGISTRY_COLUMNS = 5  # 上游檔案 | 上游原狀 | 本 fork 狀態 | 為什麼分岔 | 跟進上游時怎麼處理
+# GFM's rule is "a backslash escapes the punctuation character after it", not "a pipe
+# preceded by a backslash is literal". The two differ on a run of backslashes: in `b\\|`
+# the first backslash escapes the second, so the pipe is a real cell separator. A
+# `(?<!\\)\|` lookbehind gets that backwards in both directions -- it reads a real
+# separator as literal (a malformed row passing as fine) and, with `\|`, a literal pipe
+# as a separator. So resolve every escape pair away first, then count what is left.
+_ESCAPE_PAIR_RE = re.compile(r"\\.", re.DOTALL)
+
+
+def _column_count(row: str) -> int:
+    """Cells in a GFM table row, counting the way GFM counts them."""
+    without_escapes = _ESCAPE_PAIR_RE.sub("", row.strip())
+    # The leading pipe is required; the trailing one is optional in GFM.
+    if without_escapes.startswith("|"):
+        without_escapes = without_escapes[1:]
+    if without_escapes.endswith("|"):
+        without_escapes = without_escapes[:-1]
+    return len(without_escapes.split("|"))
+
+
+def malformed_rows(text: str) -> list[tuple[int, int, str]]:
+    """Registry rows whose cell count is not `REGISTRY_COLUMNS`, as `(line, cols, path)`.
+
+    `parse_registered_paths` only ever reads the FIRST cell, so for a long time a row
+    could be missing a column entirely and still register its path and pass the check.
+    That is not cosmetic: the last column ("跟進上游時怎麼處理") is what the header calls
+    this table's whole point, and in a four-cell row every later cell shifts left, so the
+    executable criterion renders under "為什麼分岔" and the real last column comes out
+    empty. 16 rows were in that state, plus 2 more split by an unescaped `|` in a type
+    union. A registry the checker only half-parses is a registry that can be half-wrong.
+    """
+    bad: list[tuple[int, int, str]] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        match = _TABLE_ROW_RE.match(stripped)
+        if not match:
+            continue
+        columns = _column_count(stripped)
+        if columns != REGISTRY_COLUMNS:
+            bad.append((number, columns, match.group(1).strip()))
+    return bad
+
+
 def parse_registered_paths(text: str) -> set[str]:
     """Every backtick-quoted path in the first column of `docs/DIVERGENCE.md`'s table.
 
@@ -201,6 +245,7 @@ def render_json(
     changed_not_registered: set[str],
     registered_not_changed: set[str],
     warning: str | None = None,
+    malformed: list[tuple[int, int, str]] | None = None,
 ) -> str:
     payload = {
         "base_commit": base_sha,
@@ -208,6 +253,14 @@ def render_json(
         "registered_files": sorted(registered),
         "changed_but_not_registered": sorted(changed_not_registered),
         "registered_but_not_changed": sorted(registered_not_changed),
+        # Without this the JSON mirror cannot express a malformed-row failure at all: all
+        # four lists come back empty and `warning` null, which reads as a clean bill of
+        # health beside a non-zero exit code. That is the defect this check exists to
+        # remove, so the mirror has to carry it too.
+        "malformed_rows": [
+            {"line": number, "columns": columns, "path": path}
+            for number, columns, path in (malformed or [])
+        ],
         "warning": warning,
     }
     return json.dumps(payload, indent=2, ensure_ascii=False)
@@ -257,11 +310,19 @@ def main() -> int:
     divergent = compute_divergent_files(pairs, owned)
     registered = parse_registered_paths(doc_text)
     changed_not_registered, registered_not_changed = compare(divergent, registered)
+    malformed = malformed_rows(doc_text)
 
     if args.json:
+        # Everything goes inside the document: `--json` promises JSON on stdout, so the
+        # human-readable block below must not be appended after it.
         print(
             render_json(
-                base_sha, divergent, registered, changed_not_registered, registered_not_changed
+                base_sha,
+                divergent,
+                registered,
+                changed_not_registered,
+                registered_not_changed,
+                malformed=malformed,
             )
         )
     else:
@@ -270,8 +331,20 @@ def main() -> int:
                 base_sha, divergent, registered, changed_not_registered, registered_not_changed
             )
         )
+        if malformed:
+            print("")
+            print(
+                f"Rows with the wrong number of columns (need {REGISTRY_COLUMNS}: "
+                "上游檔案 | 上游原狀 | 本 fork 狀態 | 為什麼分岔 | 跟進上游時怎麼處理):"
+            )
+            for number, columns, path in malformed:
+                print(f"  - line {number}: {columns} column(s) -> {path}")
+            print(
+                "A `|` inside a cell (a type union, a bitwise or) must be written `\\|`, "
+                "and the row must end with a `|`."
+            )
 
-    return 1 if (changed_not_registered or registered_not_changed) else 0
+    return 1 if (changed_not_registered or registered_not_changed or malformed) else 0
 
 
 if __name__ == "__main__":

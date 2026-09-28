@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 import check_upstream_updates as checker  # noqa: E402
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_baseline_file_is_valid_and_complete() -> None:
     baseline = checker.load_baseline()
@@ -249,6 +251,206 @@ def test_render_markdown_names_new_upstream_branches() -> None:
     assert "## Upstream branches" in report
     assert "release/1.x" in report
     assert "No branches beyond the registered ones." not in report
+
+
+def _fake_pr_list(monkeypatch: object, rows: list[dict]) -> None:
+    import subprocess
+
+    class FakeResult:
+        returncode = 0
+        stdout = json.dumps(rows)
+        stderr = ""
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: FakeResult())
+
+
+MONITORED_BASELINE = {"repo": "https://github.com/anthropics/commerce-agents.git"}
+
+
+def test_stale_monitored_reports_a_head_that_moved(monkeypatch: object) -> None:
+    """The real case: upstream updated #20 after the verdict was recorded, and because
+    `reviewed_pr_through` was already past 20 nothing ever mentioned it again."""
+    _fake_pr_list(
+        monkeypatch,
+        [
+            {
+                "number": 20,
+                "state": "OPEN",
+                "isDraft": True,
+                "headRefOid": "8b7f9b93e8e1aaaabbbbccccddddeeeeffff0000",
+            }
+        ],
+    )
+    baseline = {
+        **MONITORED_BASELINE,
+        "monitored": [{"item": "pr#20", "head": "b3cfe06", "state": "draft"}],
+    }
+
+    stale = checker.collect_stale_monitored(baseline)
+
+    assert [entry["item"] for entry in stale] == ["pr#20"]
+    assert "b3cfe06" in stale[0]["was"] and "8b7f9b9" in stale[0]["now"]
+
+
+def test_stale_monitored_is_quiet_when_head_and_state_both_hold(monkeypatch: object) -> None:
+    _fake_pr_list(
+        monkeypatch,
+        [
+            {
+                "number": 7,
+                "state": "OPEN",
+                "isDraft": False,
+                "headRefOid": "564922102c484dd79cc93770198dbe93297fd58d",
+            }
+        ],
+    )
+    baseline = {
+        **MONITORED_BASELINE,
+        "monitored": [{"item": "pr#7", "head": "5649221", "state": "open"}],
+    }
+
+    assert checker.collect_stale_monitored(baseline) == []
+
+
+def test_stale_monitored_reports_a_state_change_at_the_same_head(monkeypatch: object) -> None:
+    """A draft going non-draft, or an item closing, invalidates a "no code yet" verdict
+    just as surely as a new commit does."""
+    _fake_pr_list(
+        monkeypatch,
+        [
+            {
+                "number": 19,
+                "state": "OPEN",
+                "isDraft": False,
+                "headRefOid": "e49a738000000000000000000000000000000000",
+            }
+        ],
+    )
+    baseline = {
+        **MONITORED_BASELINE,
+        "monitored": [{"item": "pr#19", "head": "e49a738", "state": "draft"}],
+    }
+
+    stale = checker.collect_stale_monitored(baseline)
+
+    assert len(stale) == 1
+    assert "draft" in stale[0]["was"] and "open" in stale[0]["now"]
+
+
+def test_stale_monitored_treats_an_unverifiable_pin_as_drift(monkeypatch: object) -> None:
+    """`docs/DECISIONS.md` recorded #21 as `7adc548`; upstream's head is `7adc54c`, so
+    that pin never matched anything and was never going to. A pin too short to identify
+    a commit, or missing outright, is drift rather than a silent pass."""
+    _fake_pr_list(
+        monkeypatch,
+        [
+            {
+                "number": 21,
+                "state": "OPEN",
+                "isDraft": True,
+                "headRefOid": "7adc54c7837a0000000000000000000000000000",
+            }
+        ],
+    )
+
+    for pin in ("7adc548", "7adc5", ""):
+        baseline = {
+            **MONITORED_BASELINE,
+            "monitored": [{"item": "pr#21", "head": pin, "state": "draft"}],
+        }
+        assert len(checker.collect_stale_monitored(baseline)) == 1, pin
+
+
+def test_stale_monitored_reports_an_item_upstream_no_longer_lists(monkeypatch: object) -> None:
+    _fake_pr_list(
+        monkeypatch, [{"number": 99, "state": "OPEN", "isDraft": False, "headRefOid": "a" * 40}]
+    )
+    baseline = {
+        **MONITORED_BASELINE,
+        "monitored": [{"item": "pr#7", "head": "5649221", "state": "open"}],
+    }
+
+    stale = checker.collect_stale_monitored(baseline)
+
+    assert stale[0]["now"] == "not found"
+
+
+def test_stale_monitored_separates_undeclared_from_unavailable(monkeypatch: object) -> None:
+    import subprocess
+
+    class Failed:
+        returncode = 1
+        stdout = ""
+        stderr = "gh: authentication required"
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: Failed())
+
+    assert checker.collect_stale_monitored(MONITORED_BASELINE) is checker.UNDECLARED
+    assert checker.collect_stale_monitored({**MONITORED_BASELINE, "monitored": "pr#7"}) is (
+        checker.UNDECLARED
+    )
+    # A malformed entry is undeclared, not "nothing moved".
+    assert (
+        checker.collect_stale_monitored({**MONITORED_BASELINE, "monitored": [{"item": "issue#7"}]})
+        is checker.UNDECLARED
+    )
+    assert (
+        checker.collect_stale_monitored(
+            {**MONITORED_BASELINE, "monitored": [{"item": "pr#7", "head": "x", "state": "open"}]}
+        )
+        is None
+    )
+
+
+def test_baseline_pins_every_conditional_verdict_recorded_in_decisions() -> None:
+    """Every row of `docs/DECISIONS.md`'s PR table whose verdict is 觀察 (monitor) must be
+    pinned in `monitored`, and nothing else should be.
+
+    Derived from the decision log rather than hard-coded: a fixed set would catch an
+    entry being deleted but not a NEW conditional verdict nobody pinned -- which is the
+    very thing this axis exists to prevent, reproduced one level up. The list this
+    compares against must have a source, or it is another list nobody checks.
+    """
+    import re as _re
+
+    decisions = (REPO_ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    row = _re.compile(r"^\| #(\d+) \|(.*)$", _re.MULTILINE)
+    conditional = {
+        f"pr#{match.group(1)}" for match in row.finditer(decisions) if "觀察" in match.group(2)
+    }
+    assert conditional, "parsed no 觀察 rows out of docs/DECISIONS.md -- the parser is wrong"
+
+    baseline = checker.load_baseline()
+    pinned = {entry["item"] for entry in baseline["monitored"]}
+
+    assert pinned == conditional
+    for entry in baseline["monitored"]:
+        assert len(entry["head"]) >= 7
+        assert entry["state"] in {"open", "draft", "closed"}
+
+
+def test_render_markdown_names_stale_monitored_items() -> None:
+    baseline = {
+        "repo": "https://example.invalid/upstream.git",
+        "branch": "main",
+        "reviewed_through": "a" * 40,
+        "reviewed_date": "2026-09-05",
+        "branches": ["main"],
+        "monitored": [{"item": "pr#20", "head": "b3cfe06", "state": "draft"}],
+    }
+
+    report = checker.render_markdown(
+        baseline,
+        [],
+        prs=[],
+        issues=checker.DISABLED,
+        branches=[],
+        monitored=[{"item": "pr#20", "was": "b3cfe06 / draft", "now": "8b7f9b9 / draft"}],
+    )
+
+    assert "Monitored upstream items" in report
+    assert "pr#20" in report
+    assert "Every pinned item is still at the head" not in report
 
 
 def test_load_baseline_rejects_missing_file(tmp_path: Path) -> None:

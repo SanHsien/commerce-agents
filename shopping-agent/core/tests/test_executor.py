@@ -285,6 +285,28 @@ async def test_checkout_handoff_reaches_the_card_and_not_the_model(executor, bac
     assert "pay.example" not in result.result_text
 
 
+async def test_checkout_refusal_is_worded_for_a_checkout_not_an_add(executor, backend, monkeypatch):
+    """A handoff that raises `Unavailable` (a line sold out between staging and payment)
+    must not be relayed with `domain_error`'s add wording, which tells the model to
+    perform an add in answer to a failed checkout."""
+    from shopping_agent.backend import Unavailable
+
+    async def refused(session, cart):
+        raise Unavailable("Cast-iron stove sold out; the enamel stove is available")
+
+    monkeypatch.setattr(backend, "checkout_handoff", refused)
+    await executor.execute("search_products", {"query": "stove"})
+    await executor.execute("add_to_cart", {"product_id": "p-200"})
+    result = await executor.execute("checkout", {})
+
+    assert result.is_error
+    assert "Nothing was added" not in result.result_text
+    assert "add that only once they choose it" not in result.result_text
+    assert "checkout was refused" in result.result_text
+    assert "enamel stove is available" in result.result_text  # the backend's own message
+    assert not [e for e in result.events if e.type == "ui"]  # no checkout card is rendered
+
+
 async def test_inline_preferences_carry_saved_memory_only_while_enabled(
     backend, config, skills, session, state
 ):
