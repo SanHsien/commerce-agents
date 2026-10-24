@@ -24,7 +24,7 @@
 | 項目 | 說明 |
 |---|---|
 | `README.md` | 繁中主檔；英文原文在 `README.en.md`（`git mv` 保留，只加了一行語言列） |
-| `CLAUDE.md` | 最上方加一節 fork 邊界（指向 `AGENTS.md`、不對上游開 PR、繁中回覆），其餘上游內容原封不動 |
+| `CLAUDE.md` | 已刪除，內容併入 `AGENTS.md`；上游再改時保留刪除 |
 | `AGENTS.md` | 新增：AI agent 的單一真相源，尾端一節本 fork 的維護規則 |
 | `NOTICE.md` / `FORK.md` | 新增：來源、Apache-2.0 授權說明、同步策略 |
 | `CHANGELOG.md` / `CHANGELOG.en.md` | 新增：只記本 fork 自己的維護歷史，不記上游的 |

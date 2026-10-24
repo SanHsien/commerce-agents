@@ -1,8 +1,8 @@
 # AGENTS.md
 
 本檔是所有 AI coding agent（Claude Code、Cursor、Copilot 等）在
-`SanHsien/commerce-agents` 這個 fork 工作時的**單一真相源**。`CLAUDE.md` 只放一段指回本檔
-的薄補丁，不重複這裡的規則；上游 `anthropics/commerce-agents` 沒有 `AGENTS.md`，本檔是這條
+`SanHsien/commerce-agents` 這個 fork 工作時的**單一真相源**。上游的 `CLAUDE.md` 已刪除，內容併入
+本檔（上游再改時保留刪除，不新增 `CLAUDE.md`）；上游 `anthropics/commerce-agents` 沒有 `AGENTS.md`，本檔是這條
 維護線自己建立的。
 
 ## 這個 repo 是什麼
