@@ -26,7 +26,7 @@ mcp = ["mcp>=1.2"]
 # install [examples] through requirements.txt and the test tools through requirements-dev.txt;
 # [dev] is the unpinned equivalent for a standalone install of this package.
 # ruff is bounded to one formatter style so a new release cannot fail `ruff format --check`.
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.15,<0.17", "httpx>=0.27", "mcp>=1.2"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.15,<0.18", "httpx>=0.27", "mcp>=1.2"]
 examples = [
   # 0.132 made JSON bodies require a JSON content type, which keeps a cross-site form
   # POST out of the demo APIs.

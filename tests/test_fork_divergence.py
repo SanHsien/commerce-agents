@@ -127,6 +127,7 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "requirements.txt",
         ".github/workflows/ci.yml",
         "commerce-common/commerce_common/agent_sdk.py",
+        "commerce-common/pyproject.toml",
         "commerce-common/tests/test_agent_sdk.py",
         "commerce-common/tests/test_memory_stores.py",
         "examples/package.json",

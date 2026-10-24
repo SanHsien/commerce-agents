@@ -7,9 +7,9 @@
 pytest==9.1.1
 pytest-asyncio==1.4.0
 # Kept at the latest release rather than pinned behind upstream; see docs/DIVERGENCE.md.
-ruff==0.16.6
+ruff==0.17.2
 # CPython on Windows has no system IANA time zone database, so `zoneinfo.ZoneInfo` raises
 # for every named zone there; this is the PyPI mirror of that database, installed only on
 # Windows via the environment marker. See docs/DIVERGENCE.md for why this line lives here
 # (folded into upstream's own file) rather than in a fork-only sibling requirements file.
-tzdata==2026.3; sys_platform == "win32"
+tzdata==2026.5; sys_platform == "win32"
