@@ -69,7 +69,7 @@ def test_every_fork_owned_requirements_file_is_checked() -> None:
     packages = checker.load_direct_dependencies()
     by_name = {package["name"]: package for package in packages}
     assert by_name["tzdata"]["source"] == "requirements-dev.txt"
-    assert by_name["tzdata"]["minimum"] == "2026.3"
+    assert by_name["tzdata"]["minimum"] == "2026.5"
 
 
 def test_a_requirements_include_line_is_not_expanded() -> None:
