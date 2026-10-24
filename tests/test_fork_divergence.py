@@ -124,6 +124,7 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         ".gitignore",
         "ruff.toml",
         "requirements-dev.txt",
+        "requirements.txt",
         ".github/workflows/ci.yml",
         "commerce-common/commerce_common/agent_sdk.py",
         "commerce-common/tests/test_agent_sdk.py",

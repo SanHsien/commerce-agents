@@ -715,3 +715,15 @@ reviewer 獨立驗過而我沒有重複的幾點，記下來免得日後重查�
 `execution.py` 的 ladder 再進 `domain_error`；`NotOffered` 不跟著攔是對的（它的措辭在結帳情境不誤導）；
 `agent_sdk.ground` 的 `dispatch` 只會跑有 `prefetch_intro` 的 `get_orders`／`get_product_details`，
 不會跑 `checkout`，所以沒有第二條路徑被改到。
+
+## 2026-10-24：修補 Dependabot 警示 #31（`mcp`）並順手升 `certifi`
+
+**決定**：`requirements.txt` 的 `mcp` 由 1.29.0 升到 1.30.0（與 Dependabot PR #5 同版本，該 PR 保持開啟）；`certifi` 由 2026.7.22 升到 2026.10.19。沒有改任何產品程式碼。
+
+**理由**：`mcp` 1.29.0 落在 GHSA-84m7-p3x7-pcfv 的受影響範圍（`>= 1.8.0, < 1.30.0`），修補版 1.30.0。`certifi` 沒有 Dependabot 警示，但 `pip-audit` 對 requirements 釘版回報 PYSEC-2026-4320（bundle 內含被入侵中繼 CA 的 emSign 根憑證，可在中間人位置偽造任何主機名的憑證），修補版 2026.10.19，屬同一份 manifest 內有修補版的 TLS 信任弱點，因此一併處理。
+
+**驗證**：`pip-audit --no-deps` 對 `requirements.txt` 釘版：升級前 2 筆（`mcp`、`certifi`），升級後 0 筆；`requirements-dev.txt` 的釘版 0 筆。`tools/check_pin_bounds.py` 通過；新環境 `pip install -r requirements-dev.txt` 後 `pip check` 無衝突；`tools/dev_check.ps1` 全綠。
+
+**同批處理 `examples/package-lock.json`**：Dependabot 沒有對它發警示，但 `npm audit` 回報 critical（`next` 16.3.8，Image Optimization 與 `use cache` 的遠端程式碼執行、Server Actions DoS）與 high（`sharp`、`source-map-js`），修補版都在 `package.json` 既有範圍內，因此用 `npm audit fix --package-lock-only --ignore-scripts` 重產 lock：`next` 16.4.3、`sharp` 0.35.5、`source-map-js` 1.2.2。lock diff 沒有新增或移除套件、沒有新 install script、`resolved` 皆為官方 registry。`npm ci --ignore-scripts && npm run build`（CI 的 examples job 同一組指令）通過，`npm audit` 為 0。分岔登記見 `docs/DIVERGENCE.md`。
+
+**未涵蓋**：Python 端只掃描 `requirements*.txt` 的直接釘版（`-e` 套件的傳遞依賴已全部在釘版清單內）；上游 remote 的 Dependabot 分支（`next-16.3.4`、`sharp-0.35.4`）不處理，因為本次 lock 已超過那些版本。
