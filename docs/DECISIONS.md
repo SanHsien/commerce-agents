@@ -258,7 +258,7 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 |---|---|---|---|---|
 | #5 | scaffold-commerce-agent.md 文法：「write the backend as X is written」→「the way X is written」 | open, `b808b55` | 已採納（本輪） | 原句 `write the backend as MockRetail... is written` 語意不通順（`as X is written` 不成立的比較結構）；新句可讀。本 fork 該行現狀與上游基準相同（`sed -n '179p'` 確認），未分岔。 |
 | #6 | docs/backends.md 文法：刪掉贅字 `stays` | open, `f1043f4` | 拒絕（審查誤判） | 原句「prices stays this way」主謂不一致且贅字；新句「prices this way」正確。本 fork 該行未分岔（現狀與上游基準相同）。 |
-| #7 | Add WebMCP support | open, `5649221` | 觀察（2026-09-29 安全審查已定案：**暫不採納**，附三項重啟條件，見本檔 2026-09-29 段落；`monitored` 已釘此 head） | 跨 4 個垂直（retail/travel/telecom/entertainment）× storefront/merchant 共 26 個檔案、新增 `web-shared` 的 `useWebMcpTools`/`createStorefrontWebMcpTools`/`createMerchantWebMcpTools`，是全新能力（瀏覽器端暴露唯讀 MCP 工具），不是缺陷修正。雖然標了 `"risk":"read-only"`／`"untrustedContent":true` 顯示作者有意識到信任邊界，但範圍與安全影響（瀏覽器暴露的工具端點如何綁定 session、是否可被同頁面其他腳本呼叫）需要獨立、有邊界的審查，不適合塞進本輪 PR 分類判決。 |
+| #7 | Add WebMCP support | closed 未合併（2026-10-15）, `c877d2a`（原 `5649221`；2026-10-25 重讀，見該日段落） | 觀察（2026-09-29 安全審查已定案：**暫不採納**，附三項重啟條件，見本檔 2026-09-29 段落；`monitored` 已釘此 head） | 跨 4 個垂直（retail/travel/telecom/entertainment）× storefront/merchant 共 26 個檔案、新增 `web-shared` 的 `useWebMcpTools`/`createStorefrontWebMcpTools`/`createMerchantWebMcpTools`，是全新能力（瀏覽器端暴露唯讀 MCP 工具），不是缺陷修正。雖然標了 `"risk":"read-only"`／`"untrustedContent":true` 顯示作者有意識到信任邊界，但範圍與安全影響（瀏覽器暴露的工具端點如何綁定 session、是否可被同頁面其他腳本呼叫）需要獨立、有邊界的審查，不適合塞進本輪 PR 分類判決。 |
 | #8 | shopping executor：cart quantity 驗成 argument error 而非 outage | open, `0a11006` | **已採納（`4dc206d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/executor.py:165,175` 現狀是 `int(tool_input.get("quantity") or 1)`，`quantity="abc"` 觸發原生 `ValueError`（不是 `commerce_common.execution.InvalidArguments`），落進 `BaseToolExecutor.execute` 的 `except Exception` 泛用分支（`commerce-common/commerce_common/execution.py:219-223`），回報成「unavailable」而非具名的 argument 錯誤。PR 改用既有的 `parse_argument()`（同檔案已用於 `SearchFilters`，`executor.py:135`），做法與現有慣例一致。 |
 | #9 | shopping cards：model-authored `reason` 文字進 host 前先過 fence sanitizer | open, `61bad1c` | **已採納（`489286d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/enrichment.py:92,213` 現狀直接把 `pick.reason`／`pick["reason"]`（模型產生的文字）塞進 UI payload，未過 `STOREFRONT_FENCE.sanitize_text`。`commerce-common/commerce_common/fencing.py` 已有 `Fence.sanitize_text`，本專案設計規則（`AGENTS.md`「第三方內容一律圈在 fence 裡」）與既有的 ReDoS 修補案例（`docs/DIVERGENCE.md` 的 `orders.tsx` 一列）都是同一類「model/third-party 文字進 host 渲染層前要清洗」的原則，這裡是一個遺漏點：模型可在 `reason` 裡塞入 fence 標記或不可見字元。 |
 | #10 | merchant guardrails：價格超過兩位小數視為違規 | open, `f184ed9` | **已採納（`4dc206d`）** | 已重現缺陷：`merchant-agent/core/merchant_agent/changes.py` 的 `check_guardrails`（約 70 行起）目前沒有小數位檢查，`79.795` 這類價格可以通過寫入閘門。與既有的 `check_pin_bounds.py`／guardrails 精神一致（寫入操作要在程式碼裡有上限與檢查）。 |
@@ -727,3 +727,27 @@ reviewer 獨立驗過而我沒有重複的幾點，記下來免得日後重查�
 **同批處理 `examples/package-lock.json`**：Dependabot 沒有對它發警示，但 `npm audit` 回報 critical（`next` 16.3.8，Image Optimization 與 `use cache` 的遠端程式碼執行、Server Actions DoS）與 high（`sharp`、`source-map-js`），修補版都在 `package.json` 既有範圍內，因此用 `npm audit fix --package-lock-only --ignore-scripts` 重產 lock：`next` 16.4.3、`sharp` 0.35.5、`source-map-js` 1.2.2。lock diff 沒有新增或移除套件、沒有新 install script、`resolved` 皆為官方 registry。`npm ci --ignore-scripts && npm run build`（CI 的 examples job 同一組指令）通過，`npm audit` 為 0。分岔登記見 `docs/DIVERGENCE.md`。
 
 **未涵蓋**：Python 端只掃描 `requirements*.txt` 的直接釘版（`-e` 套件的傳遞依賴已全部在釘版清單內）；上游 remote 的 Dependabot 分支（`next-16.3.4`、`sharp-0.35.4`）不處理，因為本次 lock 已超過那些版本。
+
+## 2026-10-25：上游審查補審 #37–#39、兩條新分支，重讀 #7（`5649221` → `c877d2a`）
+
+上游 `main` 仍只有 `fd4d592` 一個 commit，無新 commit。Upstream check 的紅燈來自 PR 軸三筆新項目、
+分支軸兩條新分支、監控軸一筆漂移；逐項查證如下，水位隨本次推進。
+
+| PR | 標題 | 實際狀態 / head | 判決 | 理由（附證據） |
+|---|---|---|---|---|
+| #37 | Bump `pyjwt` 2.13.0 → 2.15.0 | open, `8c2b1a1` | **已採納（fork PR #3）** | 只動 `requirements.txt` 一行。本 fork `requirements.txt:46` 已是 `pyjwt==2.15.0`（2026-10-02 經 Dependabot PR #3 合併）。 |
+| #38 | Document the retailer shopping-agent plan… | closed 未合併（2026-10-15），`9153694` | **不採納** | 新增 `docs/plan/*`（11 份規劃文件）與一份 `CLAUDE.md`、改 `.gitignore`，無任何程式碼。作者 `subhamk123` 關閉時留言「Opened against the wrong repository」——是投錯 repo，不是上游評審後的方案。本 fork 刻意不保留 `CLAUDE.md`（見 `FORK.md`），規劃文件是作者自己的產品方向，與本 fork 的維護範圍無關。 |
+| #39 | Bump `mcp` 1.29.0 → 1.30.0 | open, `fa71594` | **已採納（fork PR #6）** | 只動 `requirements.txt` 一行。本 fork `requirements.txt:41` 已是 `mcp==1.30.0`，該版本修補 GHSA-84m7-p3x7-pcfv（見 2026-10-24 段落）。 |
+
+**分支軸**：`dependabot/pip/mcp-1.30.0`（= #39）與 `dependabot/pip/pyjwt-2.15.0`（= #37）兩條都是上游
+Dependabot 為上表兩個 PR 開的分支，內容已在本 fork，登記為「看過並決定」。先前報告猜測的「本 fork 自己的
+分支被誤算」不成立：`ls-remote` 比對的是上游 remote，本 fork 的 `ci/…`、`security/…` 不在其中。
+
+**#7 重讀（`5649221` → `c877d2a`，state open → closed）**：上游 PR 已被作者 `antonvishal` 於 2026-10-15
+關閉、未合併，也沒有留言說明。新 head 比舊 head 多的只有 8 個 `postcss.config.mjs` 各加兩行
+`import { createRequire } …; const require = createRequire(import.meta.url);`；本 fork 的
+`examples/*/postcss.config.mjs` 不使用 `require`（只有 `export default config`），該改動對本 fork 是惰性
+程式碼，不移植。`examples/web-shared/webmcp.ts` 與先前審查的版本同為 208 行，`webmcp.ts:37`
+仍是 `navigator.modelContext || document.modelContext`、`:39` 仍以 `.catch(() => {` 吞掉註冊失敗、仍無
+註銷路徑——2026-09-29 的三項重啟條件**一項都未滿足**。判決維持「暫不採納」；因 PR 已關閉，重啟條件
+再補一項：**上游重新開啟或有人重新提出此功能**。`monitored` 重新釘到 `c877d2a` / `closed`。
