@@ -258,7 +258,7 @@ anthropics/commerce-agents`）後的判斷；**本輪判決全部只是紀錄，
 |---|---|---|---|---|
 | #5 | scaffold-commerce-agent.md 文法：「write the backend as X is written」→「the way X is written」 | open, `b808b55` | 已採納（本輪） | 原句 `write the backend as MockRetail... is written` 語意不通順（`as X is written` 不成立的比較結構）；新句可讀。本 fork 該行現狀與上游基準相同（`sed -n '179p'` 確認），未分岔。 |
 | #6 | docs/backends.md 文法：刪掉贅字 `stays` | open, `f1043f4` | 拒絕（審查誤判） | 原句「prices stays this way」主謂不一致且贅字；新句「prices this way」正確。本 fork 該行未分岔（現狀與上游基準相同）。 |
-| #7 | Add WebMCP support | closed 未合併（2026-10-15）, `c877d2a`（原 `5649221`；2026-10-25 重讀，見該日段落） | 觀察（2026-09-29 安全審查已定案：**暫不採納**，附三項重啟條件，見本檔 2026-09-29 段落；`monitored` 已釘此 head） | 跨 4 個垂直（retail/travel/telecom/entertainment）× storefront/merchant 共 26 個檔案、新增 `web-shared` 的 `useWebMcpTools`/`createStorefrontWebMcpTools`/`createMerchantWebMcpTools`，是全新能力（瀏覽器端暴露唯讀 MCP 工具），不是缺陷修正。雖然標了 `"risk":"read-only"`／`"untrustedContent":true` 顯示作者有意識到信任邊界，但範圍與安全影響（瀏覽器暴露的工具端點如何綁定 session、是否可被同頁面其他腳本呼叫）需要獨立、有邊界的審查，不適合塞進本輪 PR 分類判決。 |
+| #7 | Add WebMCP support | closed 未合併（2026-10-15）, `c877d2a`（原 `5649221`；2026-10-25 重讀，見該日段落） | 觀察（2026-09-29 安全審查已定案：**暫不採納**；2026-10-25 起改為**拒絕、永不移植**（新 head 夾帶惡意 payload），見該日段落；`monitored` 已釘此 head） | 跨 4 個垂直（retail/travel/telecom/entertainment）× storefront/merchant 共 26 個檔案（2026-10-25 新 head 起為 34 個，多出的 8 個 `postcss.config.mjs` 含惡意 payload，見該日段落）、新增 `web-shared` 的 `useWebMcpTools`/`createStorefrontWebMcpTools`/`createMerchantWebMcpTools`，是全新能力（瀏覽器端暴露唯讀 MCP 工具），不是缺陷修正。雖然標了 `"risk":"read-only"`／`"untrustedContent":true` 顯示作者有意識到信任邊界，但範圍與安全影響（瀏覽器暴露的工具端點如何綁定 session、是否可被同頁面其他腳本呼叫）需要獨立、有邊界的審查，不適合塞進本輪 PR 分類判決。 |
 | #8 | shopping executor：cart quantity 驗成 argument error 而非 outage | open, `0a11006` | **已採納（`4dc206d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/executor.py:165,175` 現狀是 `int(tool_input.get("quantity") or 1)`，`quantity="abc"` 觸發原生 `ValueError`（不是 `commerce_common.execution.InvalidArguments`），落進 `BaseToolExecutor.execute` 的 `except Exception` 泛用分支（`commerce-common/commerce_common/execution.py:219-223`），回報成「unavailable」而非具名的 argument 錯誤。PR 改用既有的 `parse_argument()`（同檔案已用於 `SearchFilters`，`executor.py:135`），做法與現有慣例一致。 |
 | #9 | shopping cards：model-authored `reason` 文字進 host 前先過 fence sanitizer | open, `61bad1c` | **已採納（`489286d`）** | 已重現缺陷：`shopping-agent/core/shopping_agent/enrichment.py:92,213` 現狀直接把 `pick.reason`／`pick["reason"]`（模型產生的文字）塞進 UI payload，未過 `STOREFRONT_FENCE.sanitize_text`。`commerce-common/commerce_common/fencing.py` 已有 `Fence.sanitize_text`，本專案設計規則（`AGENTS.md`「第三方內容一律圈在 fence 裡」）與既有的 ReDoS 修補案例（`docs/DIVERGENCE.md` 的 `orders.tsx` 一列）都是同一類「model/third-party 文字進 host 渲染層前要清洗」的原則，這裡是一個遺漏點：模型可在 `reason` 裡塞入 fence 標記或不可見字元。 |
 | #10 | merchant guardrails：價格超過兩位小數視為違規 | open, `f184ed9` | **已採納（`4dc206d`）** | 已重現缺陷：`merchant-agent/core/merchant_agent/changes.py` 的 `check_guardrails`（約 70 行起）目前沒有小數位檢查，`79.795` 這類價格可以通過寫入閘門。與既有的 `check_pin_bounds.py`／guardrails 精神一致（寫入操作要在程式碼裡有上限與檢查）。 |
@@ -743,11 +743,19 @@ reviewer 獨立驗過而我沒有重複的幾點，記下來免得日後重查�
 Dependabot 為上表兩個 PR 開的分支，內容已在本 fork，登記為「看過並決定」。先前報告猜測的「本 fork 自己的
 分支被誤算」不成立：`ls-remote` 比對的是上游 remote，本 fork 的 `ci/…`、`security/…` 不在其中。
 
-**#7 重讀（`5649221` → `c877d2a`，state open → closed）**：上游 PR 已被作者 `antonvishal` 於 2026-10-15
-關閉、未合併，也沒有留言說明。新 head 比舊 head 多的只有 8 個 `postcss.config.mjs` 各加兩行
-`import { createRequire } …; const require = createRequire(import.meta.url);`；本 fork 的
-`examples/*/postcss.config.mjs` 不使用 `require`（只有 `export default config`），該改動對本 fork 是惰性
-程式碼，不移植。`examples/web-shared/webmcp.ts` 與先前審查的版本同為 208 行，`webmcp.ts:37`
-仍是 `navigator.modelContext || document.modelContext`、`:39` 仍以 `.catch(() => {` 吞掉註冊失敗、仍無
-註銷路徑——2026-09-29 的三項重啟條件**一項都未滿足**。判決維持「暫不採納」；因 PR 已關閉，重啟條件
-再補一項：**上游重新開啟或有人重新提出此功能**。`monitored` 重新釘到 `c877d2a` / `closed`。
+**#7 重讀（`5649221` → `c877d2a`，state open → closed）**：**新 head 夾帶混淆過的惡意 payload，永不移植。**
+作者 `antonvishal` 於 2026-10-13T19:28:20Z 對 PR 推了新 head，2026-10-15T05:17:01Z 自行關閉、未合併、無留言。
+與舊 head 相比只有 8 個 `examples/*/*-web/postcss.config.mjs` 不同，且八個 blob 相同
+（`30fa0b2951b2862cd01f27439994d5b344a15c82`）：前兩行加了 `createRequire`，第 12 行在
+`export default config;` 後接一大串空白（整行 6785 字元），把程式推到編輯器視野之外，內容是以
+`String.fromCharCode` 還原字串的混淆程式，並把 `require`、`module`、`__dirname`、`__filename` 掛到
+`global`——config 檔供應鏈攻擊的典型手法。（唯讀查證：
+`gh api repos/anthropics/commerce-agents/git/blobs/30fa0b2951b2862cd01f27439994d5b344a15c82`，未執行。）
+本 fork 的 `examples/*/postcss.config.mjs` 沒有這段（無超過 200 字元的行、不使用 `require`）。
+先前同日首版紀錄把這個改動寫成「只加兩行、惰性程式碼」，是只看了 diff 前幾行、沒發現被空白推到
+右側的程式碼，已更正。`examples/web-shared/webmcp.ts` 本身未變（208 行；`:37` 仍是
+`navigator.modelContext || document.modelContext`、`:39` 仍吞掉註冊失敗、無註銷路徑），
+2026-09-29 的三項重啟條件一項都未滿足。判決改為**拒絕且不設重啟條件**：作者已推過惡意程式，
+此後同作者或同內容的任何版本都不重新評估；若日後有他人以不同內容重提 WebMCP，另開新判決。
+`monitored` 重新釘到 `c877d2a` / `closed`。**審 diff 時一律檢查超長行與行尾空白**
+（`git diff | awk 'length>300'`）。
