@@ -766,7 +766,7 @@ Dependabot 為上表兩個 PR 開的分支，內容已在本 fork，登記為「
 重現測試）：
 
 - `check_pin_bounds`：`==1.2.*`／`!=1.2.*` 的萬用字元被換成 `0` 後比對三段，`1.2.5` 被判不符。
-- `check_links`：`[文字](路徑 "標題")` 的標題被當成路徑一部分，回報找不到檔案。
+- `check_links`：連結語法裡路徑後面的標題文字被當成路徑一部分，回報找不到檔案。
 - `check_dependency_freshness`：帶 `# freshness-hold:` 的 workflow Action 因 `minimum` 為空而恆為
   `CHECK FAILED`，每月都讓 `needs_attention` 為真。
 - `check_divergence`：git 預設 `diff.renames` 把改名併成 `R` 列，既不是 M／D／A，被改名的上游
