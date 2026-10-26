@@ -779,4 +779,4 @@ Dependabot 為上表兩個 PR 開的分支，內容已在本 fork，登記為「
 拿本機 `date.today()` 比對以 UTC 日期重定基準的 fixture（`weeks_since` 用 `datetime.now(UTC)`）。
 UTC+8 的每七天有一天 00:00–08:00（本機日期比 UTC 早一天）會讓 telecom 與 entertainment 兩個
 同名測試失敗（觀察到 2026-10-26 02:38 本機、UTC 為 10-25）。修法是測試改用 `datetime.now(UTC).date()`；
-這是上游持有的測試，修了要登記分岔，留給維護者決定。
+這是上游持有的測試。**後續（同日，主管-3 決定）：已改**，只改測試不改產品程式，偏離登記在 `docs/DIVERGENCE.md` 的 `contract.py` 列，重現測試是 `tests/test_fork_contract_clock.py`；觸發條件：上游把該處改成 UTC 就回收。
