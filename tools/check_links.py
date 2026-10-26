@@ -48,7 +48,12 @@ def iter_documents() -> list[Path]:
 
 
 def _missing_relative(path: Path, target: str) -> str | None:
-    target = target.strip().strip("<>")
+    target = target.strip()
+    if target.startswith("<"):
+        target = target[1:].split(">", 1)[0]
+    else:
+        # `[text](path "title")`: the title is not part of the target.
+        target = target.split(None, 1)[0] if target else ""
     if not target or target.startswith(SKIP_PREFIXES):
         return None
     file_part = unquote(target.split("#", 1)[0])

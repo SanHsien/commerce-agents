@@ -83,3 +83,13 @@ def test_bilingual_changelogs_cross_link_each_other() -> None:
 
     assert "CHANGELOG.en.md" in zh
     assert "CHANGELOG.md" in en
+
+
+def test_a_link_title_is_not_part_of_the_target(tmp_path: Path, monkeypatch) -> None:
+    """`[text](README.md "Readme")` is a valid CommonMark link; the title was read as
+    part of the path and reported as a missing file."""
+    (tmp_path / "README.md").write_text('[a](FORK.md "The fork")\n', encoding="utf-8")
+    (tmp_path / "FORK.md").write_text("x\n", encoding="utf-8")
+    monkeypatch.setattr(check_links, "ROOT", tmp_path)
+
+    assert check_links.check_document(tmp_path / "README.md") == []
