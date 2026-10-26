@@ -759,3 +759,24 @@ Dependabot 為上表兩個 PR 開的分支，內容已在本 fork，登記為「
 此後同作者或同內容的任何版本都不重新評估；若日後有他人以不同內容重提 WebMCP，另開新判決。
 `monitored` 重新釘到 `c877d2a` / `closed`。**審 diff 時一律檢查超長行與行尾空白**
 （`git diff | awk 'length>300'`）。
+
+## 2026-10-26：第二輪深度掃描——`tools/` 五個缺陷修正，一個上游測試的時區缺陷列為觀察
+
+掃描範圍是本 fork 自己加的 `tools/*.py`，以及對產品程式的已登記修正。修正（每個都先有會失敗的
+重現測試）：
+
+- `check_pin_bounds`：`==1.2.*`／`!=1.2.*` 的萬用字元被換成 `0` 後比對三段，`1.2.5` 被判不符。
+- `check_links`：`[文字](路徑 "標題")` 的標題被當成路徑一部分，回報找不到檔案。
+- `check_dependency_freshness`：帶 `# freshness-hold:` 的 workflow Action 因 `minimum` 為空而恆為
+  `CHECK FAILED`，每月都讓 `needs_attention` 為真。
+- `check_divergence`：git 預設 `diff.renames` 把改名併成 `R` 列，既不是 M／D／A，被改名的上游
+  檔案從分岔集合消失；改用 `--no-renames`。
+- `check_upstream_updates`：`splitlines()` 在 commit subject 含 U+2028／U+0085／換頁時切壞記錄，
+  `main` 以 `ValueError` 崩潰；缺 `gh`／`git` 執行檔時丟 `FileNotFoundError`，而不是文件承諾的
+  「未檢查」。
+
+**觀察（未改，上游持有）**：`examples/demo_common/tests/contract.py::test_snapshot_periods_end_before_boot_and_compare_to_the_prior_block`
+拿本機 `date.today()` 比對以 UTC 日期重定基準的 fixture（`weeks_since` 用 `datetime.now(UTC)`）。
+UTC+8 的每七天有一天 00:00–08:00（本機日期比 UTC 早一天）會讓 telecom 與 entertainment 兩個
+同名測試失敗（觀察到 2026-10-26 02:38 本機、UTC 為 10-25）。修法是測試改用 `datetime.now(UTC).date()`；
+這是上游持有的測試，修了要登記分岔，留給維護者決定。
