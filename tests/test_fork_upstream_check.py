@@ -491,3 +491,52 @@ def test_baseline_matches_decisions_record() -> None:
 
     assert baseline["reviewed_date"] in decisions
     assert baseline["reviewed_through"][:7] in decisions
+
+
+def test_collect_new_commits_survives_unicode_line_separators_in_a_subject(
+    monkeypatch: object,
+) -> None:
+    """`str.splitlines()` also splits on U+2028, U+0085 and form feed, all legal in a
+    commit subject a stranger wrote. The fragment after the break has no field separator
+    and the unpack raised ValueError, which `main` does not catch."""
+    outputs = {
+        "log": "a" * 40 + "\x1f2026-01-01\x1fsplit subject\n",
+        "show": "README.md\n",
+    }
+
+    def fake_run_git(args: list[str], repo_dir: Path) -> str:
+        return outputs[args[0]]
+
+    monkeypatch.setattr(checker, "run_git", fake_run_git)
+
+    commits = checker.collect_new_commits(
+        {"reviewed_through": "b" * 40}, REPO_ROOT, "refs/upstream-check/main"
+    )
+
+    assert [c["subject"] for c in commits] == ["split subject"]
+
+
+@pytest.mark.parametrize("collect", ["pr", "monitored", "branches"])
+def test_a_missing_gh_or_git_binary_is_not_checked_rather_than_a_traceback(
+    monkeypatch: object, collect: str
+) -> None:
+    """The docstrings promise `None` ("not checked") when the tool cannot answer; a
+    missing executable raised FileNotFoundError out of `main` instead."""
+    import subprocess
+
+    def missing(*_args: object, **_kwargs: object) -> None:
+        raise FileNotFoundError("gh")
+
+    monkeypatch.setattr(subprocess, "run", missing)
+    baseline = {
+        "repo": "https://github.com/anthropics/commerce-agents.git",
+        "branches": ["main"],
+        "monitored": [{"item": "pr#1", "head": "abcdef1", "state": "open"}],
+    }
+
+    if collect == "pr":
+        assert checker.collect_new_tickets(baseline, "pr") is None
+    elif collect == "monitored":
+        assert checker.collect_stale_monitored(baseline) is None
+    else:
+        assert checker.collect_new_branches(baseline, REPO_ROOT) is None

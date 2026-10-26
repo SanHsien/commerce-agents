@@ -59,14 +59,17 @@ def load_baseline(path: Path = BASELINE_PATH) -> dict:
 
 
 def run_git(args: list[str], repo_dir: Path) -> str:
-    result = subprocess.run(
-        ["git", *args],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError as exc:
+        raise UpstreamCheckError(f"git {' '.join(args)} could not run: {exc}") from exc
     if result.returncode != 0:
         raise UpstreamCheckError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
     return result.stdout
@@ -100,7 +103,9 @@ def collect_new_commits(baseline: dict, repo_dir: Path, ref: str) -> list[dict]:
         repo_dir,
     )
     commits = []
-    for line in raw.splitlines():
+    # `str.splitlines()` would also break on U+2028, U+0085 and form feed, all legal
+    # inside a subject a stranger wrote; git ends each record with a plain newline.
+    for line in raw.split("\n"):
         if not line.strip():
             continue
         sha, date, subject = line.split("\x1f", 2)
@@ -151,15 +156,18 @@ def collect_new_branches(baseline: dict, repo_dir: Path) -> list[str] | None | s
     declared = baseline.get("branches")
     if not isinstance(declared, list) or not all(isinstance(name, str) for name in declared):
         return UNDECLARED
-    result = subprocess.run(
-        ["git", "ls-remote", "--heads", str(baseline["repo"])],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        # Branch names are written by strangers, same argument as the ticket axis.
-        errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", "--heads", str(baseline["repo"])],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            # Branch names are written by strangers, same argument as the ticket axis.
+            errors="replace",
+        )
+    except OSError:
+        return None
     if result.returncode != 0:
         return None
     seen: set[str] = set()
@@ -198,29 +206,32 @@ def collect_new_tickets(baseline: dict, kind: str) -> list[dict] | None | str:
     if not slug:
         return None
     watermark = int(baseline.get(f"reviewed_{kind}_through", 0) or 0)
-    result = subprocess.run(
-        [
-            "gh",
-            kind,
-            "list",
-            "--repo",
-            slug,
-            "--state",
-            "all",
-            "--limit",
-            "1000",
-            "--json",
-            "number,title",
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        # `errors` is not optional here. Ticket titles are written by strangers
-        # and the console this runs on is not always UTF-8; without it a single
-        # undecodable byte raises UnicodeDecodeError and the whole upstream
-        # check dies instead of reporting the tickets it did read.
-        errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                kind,
+                "list",
+                "--repo",
+                slug,
+                "--state",
+                "all",
+                "--limit",
+                "1000",
+                "--json",
+                "number,title",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            # `errors` is not optional here. Ticket titles are written by strangers
+            # and the console this runs on is not always UTF-8; without it a single
+            # undecodable byte raises UnicodeDecodeError and the whole upstream
+            # check dies instead of reporting the tickets it did read.
+            errors="replace",
+        )
+    except OSError:  # no `gh` on PATH: not checked, like missing auth
+        return None
     if result.returncode != 0:
         if (
             "disabled issues" in result.stderr.lower()
@@ -272,25 +283,28 @@ def collect_stale_monitored(baseline: dict) -> list[dict] | None | str:
     slug = upstream_slug(str(baseline["repo"]))
     if not slug:
         return None
-    result = subprocess.run(
-        [
-            "gh",
-            "pr",
-            "list",
-            "--repo",
-            slug,
-            "--state",
-            "all",
-            "--limit",
-            "1000",
-            "--json",
-            "number,state,isDraft,headRefOid",
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "list",
+                "--repo",
+                slug,
+                "--state",
+                "all",
+                "--limit",
+                "1000",
+                "--json",
+                "number,state,isDraft,headRefOid",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        return None
     if result.returncode != 0:
         return None
     try:
