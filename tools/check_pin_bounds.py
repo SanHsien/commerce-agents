@@ -100,13 +100,12 @@ def satisfies(version: str, operator: str, bound: str) -> bool | None:
         upper = satisfies(version, "<", ceiling)
         return None if lower is None or upper is None else (lower and upper)
     padded_left, padded_right = _pad(left, right)
-    if operator == "==":
-        # An `==X.Y` declaration constrains only the segments it states.
-        depth = len(right)
-        return _pad(left, right)[0][:depth] == right
-    if operator == "!=":
-        depth = len(right)
-        return _pad(left, right)[0][:depth] != right
+    if operator in ("==", "!="):
+        # An `==X.Y` declaration constrains only the segments it states, and a trailing
+        # `.*` states one fewer than the zero it was replaced with above.
+        depth = len(right) - (1 if "*" in bound else 0)
+        matches = padded_left[:depth] == right[:depth]
+        return matches if operator == "==" else not matches
     if operator == ">=":
         return padded_left >= padded_right
     if operator == ">":

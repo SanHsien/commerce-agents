@@ -165,3 +165,20 @@ def test_extras_in_a_declaration_do_not_break_the_specifier() -> None:
             "requirement": "uvicorn[standard]>=0.30",
         }
     ]
+
+
+@pytest.mark.parametrize(
+    ("version", "operator", "bound", "expected"),
+    [
+        ("1.2.5", "==", "1.2.*", True),
+        ("1.3.0", "==", "1.2.*", False),
+        ("1.2.5", "!=", "1.2.*", False),
+        ("1.3.0", "!=", "1.2.*", True),
+    ],
+)
+def test_a_wildcard_bound_constrains_only_the_segments_it_states(
+    version: str, operator: str, bound: str, expected: bool
+) -> None:
+    """`replace("*", "0")` turned `1.2.*` into `1.2.0` and compared three segments, so
+    `==1.2.*` rejected 1.2.5 and `!=1.2.*` accepted it."""
+    assert checker.satisfies(version, operator, bound) is expected
