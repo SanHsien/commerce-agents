@@ -347,3 +347,19 @@ def test_json_output_surfaces_the_check_error() -> None:
     payload = json.loads(checker.render_json([], [], "missing requirements file: nope.txt"))
 
     assert payload["error"] == "missing requirements file: nope.txt"
+
+
+def test_a_held_workflow_action_is_held_not_a_failed_check() -> None:
+    """A hold leaves `minimum` empty (the comment is the reason, not a version), and
+    `check_failed` was derived from the empty minimum: a deliberately held Action showed
+    "CHECK FAILED" and kept `needs_attention` true on every monthly run."""
+    packages = checker.parse_workflow_actions(
+        "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        " # freshness-hold: pinned for a documented reason\n",
+        "ci.yml",
+    )
+
+    rows = checker.collect_status(packages, lambda _name: "9.0.0", deferrals={})
+
+    assert rows[0]["check_failed"] is False
+    assert checker.needs_review(rows[0]) is False

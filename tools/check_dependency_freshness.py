@@ -326,7 +326,9 @@ def collect_status(
                 **package,
                 "latest": latest or "unknown",
                 "outdated": bool(minimum and latest and is_newer_version(latest, minimum)),
-                "check_failed": not minimum or latest is None,
+                # A hold leaves `minimum` empty on purpose (its comment is the reason,
+                # not a version), so an empty minimum only fails an un-held row.
+                "check_failed": (not minimum and not package.get("hold")) or latest is None,
                 "deferred_reason": reason if deferred else "",
             }
         )
