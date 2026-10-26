@@ -396,3 +396,26 @@ def test_main_returns_one_when_a_registered_row_was_not_actually_changed(
     )
 
     assert checker.main() == 1
+
+
+def test_a_renamed_upstream_file_still_counts_as_divergent(tmp_path: Path) -> None:
+    """git's default `diff.renames` folds a delete plus an add into one `R100` row, which
+    names neither status the comparison reads: the upstream file silently vanished from
+    the divergence set and a rename could go unregistered."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _run(["init", "--initial-branch=main"], repo)
+    _run(["config", "user.email", "test@example.invalid"], repo)
+    _run(["config", "user.name", "Test"], repo)
+    _run(["config", "diff.renames", "true"], repo)
+    (repo / "OLD.md").write_text("some upstream content\nthat is long enough\n", encoding="utf-8")
+    _run(["add", "."], repo)
+    _run(["commit", "-m", "base"], repo)
+    base_sha = _run(["rev-parse", "HEAD"], repo).strip()
+    _run(["mv", "OLD.md", "NEW.md"], repo)
+    _run(["commit", "-am", "rename"], repo)
+
+    owned = checker.owned_files_at_base(base_sha, repo)
+    divergent = checker.compute_divergent_files(checker.changed_since_base(base_sha, repo), owned)
+
+    assert "OLD.md" in divergent

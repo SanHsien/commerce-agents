@@ -113,11 +113,12 @@ def changed_since_base(base_sha: str, repo_dir: Path) -> list[tuple[str, str]]:
 
     `git diff <commit>` (one ref, no second one) compares the base commit against
     the working tree -- index and unstaged changes both -- so an uncommitted edit
-    is caught here too, not only a committed one. Renames are intentionally not
-    requested (`-M`): see the module docstring for why README.en.md could not be
-    discovered that way regardless, and no other renames are expected in this repo.
+    is caught here too, not only a committed one. Renames are switched off
+    (`--no-renames`) because git's default `diff.renames` would otherwise fold a
+    delete plus an add into one `R` row that names neither status; see the module
+    docstring for why README.en.md could not be discovered by rename detection anyway.
     """
-    result = run_git(["diff", "--name-status", base_sha, "--"], repo_dir)
+    result = run_git(["diff", "--name-status", "--no-renames", base_sha, "--"], repo_dir)
     if result.returncode != 0:
         raise DivergenceCheckError(f"git diff failed: {result.stderr.strip()}")
     pairs = []
