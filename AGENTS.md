@@ -124,3 +124,7 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
   跟隨上游（英文），不因本線需求翻譯。
 - **測試綠了才准提交**：`pytest -q` 全綠、`ruff check .`／`ruff format --check .` 無錯，才能
   `git commit` 再 `git push origin main`；不可用 `;` 把驗證與 commit 串成一行繞過檢查。
+
+## 路線圖
+
+- `ROADMAP.md` 是本 repo 後續工作的單一真相源。完成或新增工作時，在同一個 commit 更新它：做完的列刪掉、新工作加進去。不要在其他文件另列待辦。
