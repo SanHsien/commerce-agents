@@ -232,7 +232,7 @@ def redate_in_flight_orders(raw: dict[str, Any]) -> dict[str, Any]:
     anchor = raw.get("dates_anchored_to")
     if not anchor:
         return raw
-    delta = timedelta(days=(datetime.now().date() - date.fromisoformat(anchor)).days)
+    delta = timedelta(days=(datetime.now(UTC).date() - date.fromisoformat(anchor)).days)
     every = bool(raw.get("redate_all_orders"))
     for order in raw.get("orders", []):
         if not every and order.get("status") not in _IN_FLIGHT_STATUSES:

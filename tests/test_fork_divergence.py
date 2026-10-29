@@ -152,6 +152,7 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "merchant-agent/core/merchant_agent/changes.py",
         "merchant-agent/core/tests/test_changes.py",
         "examples/demo_common/storefront_fixtures.py",
+        "examples/demo_common/tests/test_storefront_fixtures.py",
         "examples/retail/api/mock_retail.py",
         "examples/retail/api/tests/test_mock_retail.py",
         "examples/demo_common/merchant_fixtures.py",

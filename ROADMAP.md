@@ -5,12 +5,11 @@
 
 ## 現況
 
-Anthropic `commerce-agents` 的 Windows-first 維護 fork（public）。健康：預設分支 `ci`、`CodeQL`、`Upstream check`、`Pin bounds`、`Dependency freshness` 最近一次皆 success；Dependabot 與 Code scanning 告警 0 筆；open PR 0 筆；issues 已停用（未查到 issue 數，不是 0）；無 release（證據：2026-10-29 `gh` 實查）。上游 `main` 只有 `fd4d592` 一個 commit，審查水位 `reviewed_pr_through=39`（`tools/upstream_baseline.json`），目前沒有卡住的事。
+Anthropic `commerce-agents` 的 Windows-first 維護 fork（public）。健康：預設分支 `ci`、`CodeQL`、`Upstream check`、`Pin bounds`、`Dependency freshness` 最近一次皆 success；Dependabot 與 Code scanning 告警 0 筆；open PR 0 筆；issues 已停用（未查到 issue 數，不是 0）；無 release（證據：2026-10-29 `gh` 實查）。上游 `main` 只有 `fd4d592` 一個 commit，審查水位 `reviewed_pr_through=39`（`tools/upstream_baseline.json`），目前沒有卡住的事。近期可以直接動手的項目已完成，其餘為等外部條件的中期項目。
 
 ## 近期：可以直接動手
-| 項目 | 為什麼 | 驗收方式 | 建議執行者 | 證據 |
-| --- | --- | --- | --- | --- |
-| 修 `redate_in_flight_orders` 的本機日／UTC 混用 | 函式用 `datetime.now().date()`（本機日）算位移，與已修正的 contract 測試同類；UTC+8 在 00:00–08:00 啟動 demo 時位移會差一天。目前沒有測試失敗，但屬已知同型缺陷 | 先寫重現測試（凍結時間於本機日與 UTC 日不同的時刻，修前失敗、修後通過）；改為 `datetime.now(UTC).date()`；在 `docs/DIVERGENCE.md` 登記該列並寫回收條件（上游採同型修正即回收）；`pwsh -NoProfile -File tools\dev_check.ps1` 綠 | Claude Sonnet | `examples/demo_common/storefront_fixtures.py:226-236`；接續開發／深掃報告（2026-10-26）審查員註記；同型修正見 commit `0ee59a6` |
+
+（目前無待辦項目）
 
 ## 中期：等條件成立再做
 | 項目 | 觸發條件 | 驗收方式 | 建議執行者 | 證據 |

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from demo_common.storefront_fixtures import (
     SessionCarts,
@@ -104,7 +104,9 @@ def test_ids_resolve_case_insensitively():
 
 
 def test_in_flight_orders_shift_with_the_anchor_and_finished_orders_do_not():
-    anchor = date.today() - timedelta(days=30)
+    # The fixtures rebase against the UTC date, so anchor and compare against it, not the local one.
+    today = datetime.now(UTC).date()
+    anchor = today - timedelta(days=30)
     raw = {
         "dates_anchored_to": anchor.isoformat(),
         "orders": [
@@ -121,7 +123,6 @@ def test_in_flight_orders_shift_with_the_anchor_and_finished_orders_do_not():
         ],
     }
     delayed, delivered = redate_in_flight_orders(raw)["orders"]
-    today = datetime.now().date()
     assert delayed["placed_at"] == f"{(today - timedelta(days=3)).isoformat()}T10:00:00Z"
     assert (
         delayed["estimated_delivery"]
