@@ -780,3 +780,31 @@ Dependabot 為上表兩個 PR 開的分支，內容已在本 fork，登記為「
 UTC+8 的每七天有一天 00:00–08:00（本機日期比 UTC 早一天）會讓 telecom 與 entertainment 兩個
 同名測試失敗（觀察到 2026-10-26 02:38 本機、UTC 為 10-25）。修法是測試改用 `datetime.now(UTC).date()`；
 這是上游持有的測試。**後續（同日，主管-3 決定）：已改**，只改測試不改產品程式，偏離登記在 `docs/DIVERGENCE.md` 的 `contract.py` 列，重現測試是 `tests/test_fork_contract_clock.py`；觸發條件：上游把該處改成 UTC 就回收。
+
+## 2026-11-02：依賴新鮮度紅燈後更新開發工具 pins
+
+**觸發**：唯讀查詢 `SanHsien/commerce-agents` 的 Dependency freshness run
+`41294795329`（2026-11-01）為 failure，報告指出 pytest、ruff、tzdata 有新版。
+同次重查 open Dependabot 告警與 PR 均為 0，故沒有需要改成 fixed 的告警。
+修改前 strict freshness exit 1；更新後 exit 0（needs_review 空、check_failed=false）。
+
+**決定**：路線圖這列明確要求依 fork 政策跟最新版，因此更新 `requirements-dev.txt`
+的 exact pins：pytest 9.1.1 → 9.2.0、pytest-asyncio 1.4.1 → 1.4.1.post1、
+ruff 0.17.2 → 0.17.3、tzdata 2026.5 → 2026.6。不提高 pyproject 宣告下限，
+不新增 hold 或 deferral；ruff 新 pin 仍在既有 `>=0.15,<0.18` 範圍內，
+Windows 專用 tzdata 環境標記保留。分岔登記與雙語 Changelog 同步更新。
+
+**版本來源與審查**：[pytest 9.2.0 release notes](https://docs.pytest.org/en/stable/changelog.html#pytest-9-2-0-2026-10-27)、
+[pytest-asyncio 1.4.1.post1 changelog](https://pytest-asyncio.readthedocs.io/en/stable/reference/changelog.html)、
+[ruff 0.17.3 release](https://github.com/astral-sh/ruff/releases/tag/0.17.3)、
+[tzdata 2026.6 PyPI](https://pypi.org/project/tzdata/2026.6/)。
+pytest-asyncio 的 post release 移除了 pytest 相依上界，隨 pytest 一起升版；
+七個 repo 套件仍從本地 editable 安裝，沒有改走公開索引。
+
+**先紅後綠**：系統暫存目錄 `commerce-agents-deps-20261102` 的 Python 3.13.14 venv
+安裝新版後，`python -m pytest -q` 為 exit 1：1240 passed、1 skipped、1 failed。
+唯一失敗是 `tests/test_fork_dependency_freshness.py::test_every_fork_owned_requirements_file_is_checked`
+把 tzdata 讀取結果寫死為 2026.5。測試改為從 `requirements-dev.txt` 解析 tzdata 版本比對，並斷言 marker 已剝除，之後例行升版不會再讓它變紅；
+沒有修改 parser 或產品行為，也沒有跳過測試。
+同一暫存 venv 的 `ruff check .` 與 `ruff format --check .` 都 exit 0（225 files already formatted）。
+Web 共用測試 `node --test examples/web-shared/storefront/*.test.mjs` exit 0（11 passed）。

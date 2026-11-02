@@ -69,7 +69,19 @@ def test_every_fork_owned_requirements_file_is_checked() -> None:
     packages = checker.load_direct_dependencies()
     by_name = {package["name"]: package for package in packages}
     assert by_name["tzdata"]["source"] == "requirements-dev.txt"
-    assert by_name["tzdata"]["minimum"] == "2026.5"
+    # The expected minimum comes from the declaration file itself, so a routine tzdata
+    # bump does not break this test; the property is that the marker is stripped.
+    declared = next(
+        line
+        for line in (checker.REPO_ROOT / "requirements-dev.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip().startswith("tzdata==")
+    )
+    expected = declared.split(";", 1)[0].strip().removeprefix("tzdata==")
+    assert ";" in declared, "tzdata is expected to keep its environment marker in the file"
+    assert by_name["tzdata"]["minimum"] == expected
+    assert ";" not in by_name["tzdata"]["minimum"]
 
 
 def test_a_requirements_include_line_is_not_expanded() -> None:

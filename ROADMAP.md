@@ -1,11 +1,11 @@
 # 路線圖
 
 > 本 repo 後續工作的單一真相源。做完一項，就在同一個 commit 刪掉那一列；新工作只加在這裡。
-> 現況段的數字是 2026-10-29 依 `main` `1fa87d0cbf95` 查的快照，開工前先重查 GitHub。
+> 現況段的數字是 2026-10-29 依 `main` `1fa87d0cbf95` 查的快照，另註明日期者為較新的重查；開工前先重查 GitHub。
 
 ## 現況
 
-Anthropic `commerce-agents` 的 Windows-first 維護 fork（public）。健康：預設分支 `ci`、`CodeQL`、`Upstream check`、`Pin bounds`、`Dependency freshness` 最近一次皆 success；Dependabot 與 Code scanning 告警 0 筆；open PR 0 筆；issues 已停用（未查到 issue 數，不是 0）；無 release（證據：2026-10-29 `gh` 實查）。上游 `main` 只有 `fd4d592` 一個 commit，審查水位 `reviewed_pr_through=39`（`tools/upstream_baseline.json`），目前沒有卡住的事。近期可以直接動手的項目已完成，其餘為等外部條件的中期項目。
+Anthropic `commerce-agents` 的 Windows-first 維護 fork（public）。2026-10-29 `gh` 實查（`main` `1fa87d0cbf95`）：預設分支 `ci`、`CodeQL`、`Upstream check`、`Pin bounds`、`Dependency freshness` 最近一次皆 success；Dependabot 與 Code scanning 告警 0 筆；open PR 0 筆；issues 已停用（未查到 issue 數，不是 0）；無 release。上游 `main` 只有 `fd4d592` 一個 commit，審查水位 `reviewed_pr_through=39`（`tools/upstream_baseline.json`），目前沒有卡住的事。2026-11-02 唯讀重查：`Dependency freshness` run `41294795329`（2026-11-01）為 failure，open Dependabot 告警與 PR 均為 0；其後開發依賴 pins 已更新，strict freshness 通過，無 hold 或 deferral，本機驗收結果見 `docs/DECISIONS.md`。近期可以直接動手的項目已完成，其餘為等外部條件的中期項目。
 
 ## 近期：可以直接動手
 
@@ -16,7 +16,6 @@ Anthropic `commerce-agents` 的 Windows-first 維護 fork（public）。健康�
 | --- | --- | --- | --- | --- |
 | 上游新 commit／PR 審查與採納 | `Upstream check` workflow（每週一 03:00 UTC）轉 failure，或 `gh api repos/anthropics/commerce-agents/commits` 出現 `fd4d592` 之後的 commit；failure 代表有未審項目，不是工具壞 | 每個新項目逐筆讀 diff、判決寫進 `docs/DECISIONS.md`、`tools/upstream_baseline.json` 水位前進；`python tools/check_upstream_updates.py --strict` 通過；有採納的另加重現測試並登記 `docs/DIVERGENCE.md` | Claude Sonnet | `.github/workflows/upstream-check.yml:11`；`tools/upstream_baseline.json`；`docs/DECISIONS.md` 判決一覽 |
 | 回收已登記的分岔（DIVERGENCE 各列） | 上游合併對應修正（例如 PR #14 `set_quantity`、contract 測試改 UTC）；`python tools/check_divergence.py` 會在上游檔案變動時要求重新比對 | 該列自 `docs/DIVERGENCE.md` 刪除、檔案回到上游版本、`check_divergence` 與 pytest 綠 | Claude Sonnet | `docs/DIVERGENCE.md:55`；`docs/DECISIONS.md` 2026-10-26 段落 |
-| 依賴更新（Dependabot／Dependency freshness） | `Dependency freshness`（每月 1 日）轉紅，或 `gh api repos/SanHsien/commerce-agents/dependabot/alerts?state=open` 非空，或 Dependabot 開出 PR | 依 fork 政策跟最新版；`Pin bounds` 與 `ci` 綠；該告警 state=fixed；pin 超出 `pyproject.toml` 範圍時改宣告範圍而非回退 pin | Codex | `FORK.md` 依賴政策；`.github/workflows/dependency-freshness.yml:13`、`pin-bounds.yml` |
 
 ## 刻意不做
 | 不做什麼 | 理由 | 什麼情況下重新考慮 |

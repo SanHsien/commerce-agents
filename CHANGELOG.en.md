@@ -10,6 +10,14 @@ upstream changes are tracked through `tools/check_upstream_updates.py` and
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Dependency maintenance: updated `requirements-dev.txt` to `pytest==9.2.0`,
+  `pytest-asyncio==1.4.1.post1`, `ruff==0.17.3`, and `tzdata==2026.6`;
+  retained the existing declared ranges and Windows time-zone data environment marker.
+
 ## [0.2.0] - 2026-09-05
 
 Policy reversal: this fork no longer keeps declared dependencies behind upstream or

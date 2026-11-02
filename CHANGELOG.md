@@ -9,6 +9,14 @@
 格式依循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)，版本號依循
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### Changed
+
+- 依賴維護：`requirements-dev.txt` 更新為 `pytest==9.2.0`、
+  `pytest-asyncio==1.4.1.post1`、`ruff==0.17.3`、`tzdata==2026.6`；
+  保留既有宣告範圍與 Windows 時區資料的環境標記。
+
 ## [0.2.0] - 2026-09-05
 
 政策轉向：不再為了與上游零 diff 而保留落後依賴版本或用測試繞道；依賴直接跟上游最新版走，
