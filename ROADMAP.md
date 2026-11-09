@@ -5,7 +5,7 @@
 
 ## 現況
 
-Anthropic `commerce-agents` 的 Windows-first 維護 fork（public）。2026-10-29 `gh` 實查（`main` `1fa87d0cbf95`）：預設分支 `ci`、`CodeQL`、`Upstream check`、`Pin bounds`、`Dependency freshness` 最近一次皆 success；Dependabot 與 Code scanning 告警 0 筆；open PR 0 筆；issues 已停用（未查到 issue 數，不是 0）；無 release。上游 `main` 只有 `fd4d592` 一個 commit，審查水位 `reviewed_pr_through=39`（`tools/upstream_baseline.json`），目前沒有卡住的事。2026-11-02 唯讀重查：`Dependency freshness` run `41294795329`（2026-11-01）為 failure，open Dependabot 告警與 PR 均為 0；其後開發依賴 pins 已更新，strict freshness 通過，無 hold 或 deferral，本機驗收結果見 `docs/DECISIONS.md`。近期可以直接動手的項目已完成，其餘為等外部條件的中期項目。
+Anthropic `commerce-agents` 的 Windows-first 維護 fork（public）。2026-10-29 `gh` 實查（`main` `1fa87d0cbf95`）：預設分支 `ci`、`CodeQL`、`Upstream check`、`Pin bounds`、`Dependency freshness` 最近一次皆 success；Dependabot 與 Code scanning 告警 0 筆；open PR 0 筆；issues 已停用（未查到 issue 數，不是 0）；無 release。上游 `main` 只有 `fd4d592` 一個 commit，審查水位見 `tools/upstream_baseline.json`（2026-11-09 推進到 `reviewed_pr_through=41`），目前沒有卡住的事。2026-11-02 唯讀重查：`Dependency freshness` run `41294795329`（2026-11-01）為 failure，open Dependabot 告警與 PR 均為 0；其後開發依賴 pins 已更新，strict freshness 通過，無 hold 或 deferral，本機驗收結果見 `docs/DECISIONS.md`。近期可以直接動手的項目已完成，其餘為等外部條件的中期項目。
 
 ## 近期：可以直接動手
 
