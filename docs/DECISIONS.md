@@ -808,3 +808,21 @@ pytest-asyncio 的 post release 移除了 pytest 相依上界，隨 pytest 一�
 沒有修改 parser 或產品行為，也沒有跳過測試。
 同一暫存 venv 的 `ruff check .` 與 `ruff format --check .` 都 exit 0（225 files already formatted）。
 Web 共用測試 `node --test examples/web-shared/storefront/*.test.mjs` exit 0（11 passed）。
+
+## 2026-11-09：上游審查補審 #40–#41、一條新分支；#40 移植
+
+上游 `main` 仍只有 `fd4d592` 一個 commit（`git ls-remote upstream` 的 `HEAD` 與 `refs/heads/main`
+皆為 `fd4d59224ab96b43c6dc6888207c67b3bd5a24cf`）。Upstream check 的紅燈來自 PR 軸兩筆新項目與分支軸
+一條新分支；每筆都用 `gh pr view` 與 `gh pr diff --repo anthropics/commerce-agents` 讀過 diff（唯讀），
+並對 diff 掃超長行（`awk 'length>300'`，無輸出）與行尾空白、非 ASCII 字元（只有空白的 context 行，
+無其他）。
+
+| PR | 標題 | 實際狀態 / head | 判決 | 理由（附證據） |
+|---|---|---|---|---|
+| #40 | Use sandboxed Chrome Stable for screenshot tours | open, `1b2141f`，作者 `dave7oaks`，1 檔 +4／−10 | **已移植** | 只動 `scripts/screenshot_tour.py`：`launch_browser` 原本依序嘗試內建 Chromium、`chrome`、`msedge`，且沙箱維持 Playwright 預設（關閉）；改成一次 `chromium.launch(channel="chrome", chromium_sandbox=True)`，失敗就拋出。改動是收緊、無新相依、無隱藏內容。取捨：沒有 Chrome Stable 的機器上截圖工具會直接失敗，不再退回其他瀏覽器——這個工具是可選的輔助腳本，失敗時明確比靜默退回無沙箱瀏覽器好。移植後檔案與該 PR 的 blob 相同（`git diff` 的 index 後綴 `5d37b97`）。先紅後綠：新增 `tests/test_fork_screenshot_browser.py` 兩筆（啟動參數、失敗不退回），移植前 2 failed（呼叫序列為 `[{}, {channel: chrome}, {channel: msedge}]`），移植後 2 passed。偏離登記在 `docs/DIVERGENCE.md` 的 `scripts/screenshot_tour.py` 列。 |
+| #41 | Bump `certifi` 2026.7.22 → 2026.10.18 | open, `080a91e`（Dependabot） | **已採納（更新版）** | 只動 `requirements.txt` 一行。本 fork `requirements.txt:25` 已是 `certifi==2026.10.19`（2026-10-24 安全修補，比該 PR 的版本新一版），不降版。 |
+
+**分支軸**：`dependabot/pip/certifi-2026.10.18`（head `080a91e`）= #41，內容已由本 fork 較新的釘版涵蓋，
+登記為「看過並決定」。
+
+水位：`reviewed_pr_through` 39 → 41，`branches` 與 `reviewed_branch_heads` 加入 certifi 分支。

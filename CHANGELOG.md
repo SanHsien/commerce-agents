@@ -16,6 +16,8 @@
 - 依賴維護：`requirements-dev.txt` 更新為 `pytest==9.2.0`、
   `pytest-asyncio==1.4.1.post1`、`ruff==0.17.3`、`tzdata==2026.6`；
   保留既有宣告範圍與 Windows 時區資料的環境標記。
+- 截圖工具：移植上游 PR #40，`scripts/screenshot_tour.py` 只用開啟沙箱的 Chrome Stable，
+  啟動失敗直接拋出，不再退回內建 Chromium 或 Edge。
 
 ## [0.2.0] - 2026-09-05
 

@@ -178,6 +178,7 @@ def test_the_repos_own_divergence_doc_registers_exactly_the_documented_files() -
         "shopping-agent/core/shopping_agent/prompt.py",
         "shopping-agent/core/tests/test_prompt.py",
         "shopping-agent/core/shopping_agent/backend.py",
+        "scripts/screenshot_tour.py",
     }
 
 
