@@ -14,8 +14,8 @@ Anthropic `commerce-agents` 的 Windows-first 維護 fork（public）。2026-10-
 ## 中期：等條件成立再做
 | 項目 | 觸發條件 | 驗收方式 | 建議執行者 | 證據 |
 | --- | --- | --- | --- | --- |
-| 上游新 commit／PR 審查與採納 | `Upstream check` workflow（每週一 03:00 UTC）轉 failure，或 `gh api repos/anthropics/commerce-agents/commits` 出現 `fd4d592` 之後的 commit；failure 代表有未審項目，不是工具壞 | 每個新項目逐筆讀 diff、判決寫進 `docs/DECISIONS.md`、`tools/upstream_baseline.json` 水位前進；`python tools/check_upstream_updates.py --strict` 通過；有採納的另加重現測試並登記 `docs/DIVERGENCE.md` | Claude Sonnet | `.github/workflows/upstream-check.yml:11`；`tools/upstream_baseline.json`；`docs/DECISIONS.md` 判決一覽 |
 | 回收已登記的分岔（DIVERGENCE 各列） | 上游合併對應修正（例如 PR #14 `set_quantity`、contract 測試改 UTC）；`python tools/check_divergence.py` 會在上游檔案變動時要求重新比對 | 該列自 `docs/DIVERGENCE.md` 刪除、檔案回到上游版本、`check_divergence` 與 pytest 綠 | Claude Sonnet | `docs/DIVERGENCE.md:55`；`docs/DECISIONS.md` 2026-10-26 段落 |
+| 上游新 commit／PR 審查與採納 | 觸發條件已成立（2026-11-21 查：`python tools/check_upstream_updates.py --strict` exit 1：新 PR #42、#43 與新分支 `dependabot/npm_and_yarn/examples/next-16.4.6` 待分流；`Upstream check` 2026-11-20 failure）。原條件：`Upstream check` workflow（每週一 03:00 UTC）轉 failure，或 `gh api repos/anthropics/commerce-agents/commits` 出現 `fd4d592` 之後的 commit；failure 代表有未審項目，不是工具壞 | 每個新項目逐筆讀 diff、判決寫進 `docs/DECISIONS.md`、`tools/upstream_baseline.json` 水位前進；`python tools/check_upstream_updates.py --strict` 通過；有採納的另加重現測試並登記 `docs/DIVERGENCE.md` | Claude Sonnet | `.github/workflows/upstream-check.yml:11`；`tools/upstream_baseline.json`；`docs/DECISIONS.md` 判決一覽 |
 
 ## 刻意不做
 | 不做什麼 | 理由 | 什麼情況下重新考慮 |
