@@ -826,3 +826,27 @@ Web 共用測試 `node --test examples/web-shared/storefront/*.test.mjs` exit 0�
 登記為「看過並決定」。
 
 水位：`reviewed_pr_through` 39 → 41，`branches` 加入 certifi 分支名稱（head `080a91e` 記在本段，baseline 不存各分支 head）。
+
+## 2026-11-21：上游審查補審 #42–#43、一條新分支；#42 移植
+
+上游 `main` 仍只有 `fd4d592` 一個 commit（`git ls-remote upstream` 的 `HEAD` 與 `refs/heads/main`
+皆為 `fd4d59224ab96b43c6dc6888207c67b3bd5a24cf`）。Upstream check 的紅燈（2026-11-20 failure）來自 PR 軸
+兩筆新項目與分支軸一條新分支；每筆都用 `gh pr view` 與 `gh pr diff --repo anthropics/commerce-agents`
+讀過 diff（唯讀），PR 內文只當資料。對 diff 掃超長行（`awk 'length>300'`，無輸出）與非 ASCII 字元
+（無輸出）；#43 鎖檔新增的 `resolved` 全部指向 `registry.npmjs.org`。
+
+| PR | 標題 | 實際狀態 / head | 判決 | 理由（附證據） |
+|---|---|---|---|---|
+| #42 | commerce-common: cap the mcp extras below 2 so mcp_server imports | open, `8dfa236`，作者 `vishalhabib99`，1 檔 +3／−3 | **已採納（`acd9de2`）** | 只動 `commerce-common/pyproject.toml` 三個 extra：`mcp>=1.2` → `mcp>=1.2,<2`。缺陷在本 fork 存在且已查證：PyPI 最新 `mcp` 是 2.3.0；下載該 wheel 只讀不執行，`mcp/server/fastmcp.py` 只剩一段 `raise ModuleNotFoundError`（FastMCP 改名 `mcp.server.mcpserver.MCPServer`），而 `commerce_common/mcp_server.py:20` 與兩個 managed-agent server 都 `from mcp.server.fastmcp import`。走 `requirements.txt`（`mcp==1.30.0`）不受影響，只經 extras 安裝時解到 2.x、import 即失敗。改動是收緊、無新相依。本 fork 的 `[dev]` 另有 `ruff<0.18` 分岔，所以是手動套三行而非套 PR blob。先紅後綠：新增 `tests/test_fork_mcp_extras.py` 兩筆（server 仍 import v1 模組＝上界的前提；每個列出 mcp 的 extra 排除 2.0.0、接受 1.30.0），移植前 1 failed（`[sdk] allows mcp 2`），移植後 2 passed。偏離併入 `docs/DIVERGENCE.md` 既有的 `commerce-common/pyproject.toml` 列。兩個 `runtime-agent-sdk/pyproject.toml` 也宣告 `mcp>=1.2`，但它們只用 `claude_agent_sdk.create_sdk_mcp_server`、不 import `mcp.server.fastmcp`，不在此缺陷範圍，不動。 |
+| #43 | Bump `next` 16.3.0 → 16.4.6 in /examples | open, `acaf75b`（Dependabot），9 檔 +242／−182 | **已採納（fork #9，`87630f0`）** | 八個 `package.json` 的 `next` 宣告與 `examples/package-lock.json`。本 fork 八個 `package.json` 已是 `"next": "^16.4.6"`、鎖檔解析 `next@16.4.6`、`sharp@0.35.5`（2026-11-18 Dependabot `#9`），與該 PR 結果相同。 |
+
+**分支軸**：`dependabot/npm_and_yarn/examples/next-16.4.6`（head `acaf75b`）= #43，內容已在本 fork，
+登記為「看過並決定」。
+
+**順手修正的分岔登記漂移**：`docs/DIVERGENCE.md` 八個 web app `package.json` 列仍寫本 fork 宣告
+`^16.3.4`、鎖檔列仍寫 `next@16.4.3`，實際已是 `^16.4.6`／`16.4.6`（`#9` 合併時沒同步登記表；
+`tools/check_divergence.py` 只比對路徑，抓不到內容漂移）。已改成現況並把跟進判準提到 ≥ `16.4.6`。
+`AGENTS.md`、`FORK.md`、`tools/check_pin_bounds.py` 與其測試 docstring 寫的「唯一上界
+`ruff>=0.15,<0.17`」也已過期（實為 `<0.18`，現在另有 `mcp<2`），一併訂正。
+
+水位：`reviewed_pr_through` 41 → 43，`branches` 加入 next-16.4.6 分支名稱（head `acaf75b` 記在本段）。
