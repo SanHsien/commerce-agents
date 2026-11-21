@@ -33,7 +33,7 @@
 | `.cursor/rules/no-upstream-pr.mdc` | 新增：機器可讀的「對外只打 origin」規則 |
 | `.github/dependabot.yml` | 新增：三個生態系（`github-actions`／`pip`／`npm`）全開，上限 5；用 `groups` 併成一個 PR、`ignore` 七個 in-repo 套件（未註冊在公開索引，提案只可能來自搶註者） |
 | `.github/workflows/pin-bounds.yml` | 新增：每個 PR 都跑 `tools/check_pin_bounds.py`，擋 Dependabot 把 pin 升出 pyproject 宣告範圍 |
-| `tools/check_pin_bounds.py` | 新增：比對兩份 requirements 的 exact pin 與所有 `pyproject.toml` 宣告的範圍（含唯一上界 `ruff>=0.15,<0.17`）；`scripts/check.py` 從不讀 requirements，這是唯一守得住這條的檢查 |
+| `tools/check_pin_bounds.py` | 新增：比對兩份 requirements 的 exact pin 與所有 `pyproject.toml` 宣告的範圍（含上界 `ruff>=0.15,<0.18`、`mcp>=1.2,<2`）；`scripts/check.py` 從不讀 requirements，這是唯一守得住這條的檢查 |
 | `.github/dependency-deferrals.json` | 新增：依賴新鮮度檢查的「已審查、暫不處理」記錄，初始為空結構 |
 | `.github/workflows/dependency-freshness.yml` | 新增：每月檢查 `requirements-dev.txt` 對 PyPI、workflow 釘選的 Action 對 GitHub Releases |
 | `.github/workflows/upstream-check.yml` | 新增：每週對 `upstream/main` 做未審查 commit／PR／issue 檢查 |

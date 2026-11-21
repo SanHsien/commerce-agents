@@ -4,8 +4,8 @@ Turning Dependabot loose on `requirements.txt` and `requirements-dev.txt` create
 failure mode nothing else in this repo catches. `scripts/check.py` never reads the
 requirements files at all -- it checks that the seven in-repo packages agree on a version
 and pin each other exactly, entirely inside the `pyproject.toml` files. The third-party
-declarations in those same pyprojects are ranges (`anthropic>=0.91`, and one upper bound,
-`ruff>=0.15,<0.17`), while the requirements files carry exact `==` pins. Nothing compares
+declarations in those same pyprojects are ranges (`anthropic>=0.91`, and two upper bounds,
+`ruff>=0.15,<0.18` and `mcp>=1.2,<2`), while the requirements files carry exact `==` pins. Nothing compares
 the two. A bump that walks a pin outside a declared range therefore installs cleanly,
 passes the suite, and leaves the package metadata quietly contradicting the environment
 it is tested in -- which surfaces later as an unreproducible install, not as a red run.
@@ -145,7 +145,7 @@ def parse_declarations(text: str, source: str) -> list[dict[str, str]]:
     """Every third-party requirement a pyproject declares, `dependencies` and extras alike.
 
     Extras count: `commerce-common[examples]` is how `requirements.txt` installs the demo
-    hosts, and `[dev]` declares the one upper bound in the repo (`ruff>=0.15,<0.17`).
+    hosts, and `[dev]` declares the repo's upper bounds (`ruff>=0.15,<0.18`, `mcp>=1.2,<2`).
     """
     try:
         project = tomllib.loads(text).get("project", {})

@@ -44,7 +44,7 @@ def test_both_requirements_files_are_read() -> None:
 
 
 def test_the_upper_bound_this_repo_actually_declares_is_in_scope() -> None:
-    """`ruff>=0.15,<0.17` in commerce-common's [dev] extra is the one ceiling in the repo.
+    """`ruff>=0.15,<0.18` in commerce-common's [dev] extra is the ceiling a bump most often hits.
 
     It sits in an optional-dependencies table, so a check that only read `dependencies`
     would miss the single declaration most likely to be violated by a routine bump.

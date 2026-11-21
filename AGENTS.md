@@ -100,7 +100,7 @@ API、Claude Agent SDK、Managed Agents 三條路徑上；四個垂直範例（`
   [`tools/check_pin_bounds.py`](tools/check_pin_bounds.py)。
 - **`tools/check_pin_bounds.py` 是唯一擋得住「pin 掉出宣告範圍」的檢查**：`scripts/check.py`
   **完全沒有讀 `requirements.txt`**，只看七個 `pyproject.toml` 之間的 sibling pin 一致性；
-  第三方套件在 pyproject 是範圍（`anthropic>=0.91`，以及唯一的上界 `ruff>=0.15,<0.17`），
+  第三方套件在 pyproject 是範圍（`anthropic>=0.91`；上界只有 `ruff>=0.15,<0.18` 與 `mcp>=1.2,<2`），
   在 requirements 是 exact pin，過去沒有東西比對兩者。此檢查跑在每個 PR
   （`.github/workflows/pin-bounds.yml`）與本機 gate 上。pin 掉出範圍時**把 pyproject 的範圍
   在同一個變更裡一起提高並登記分岔**，不要關掉檢查。
